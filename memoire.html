@@ -303,6 +303,28 @@
   .notes-list::-webkit-scrollbar { width: 8px; }
   .notes-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 
+  /* ---------- Full-screen note editor ---------- */
+  .note-edit-overlay {
+    position: fixed; inset: 0; background: var(--bg); z-index: 60;
+    display: flex; flex-direction: column;
+  }
+  .note-edit-overlay.hidden { display: none; }
+  .note-edit-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 14px 22px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+  }
+  .note-edit-title {
+    font-family: var(--font-display); font-size: 12px; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .note-edit-header-actions { display: flex; gap: 10px; }
+  .note-edit-textarea {
+    flex: 1; width: 100%; border: none; resize: none; padding: 24px;
+    font-family: var(--font-body); font-size: 15.5px; line-height: 1.9;
+    letter-spacing: 0.01em; color: var(--ink); background: var(--bg);
+  }
+  .note-edit-textarea:focus { outline: none; }
+
   @media (max-width: 560px) {
     .tiles { grid-template-columns: repeat(2, minmax(110px, 1fr)); }
   }
@@ -461,11 +483,8 @@
         <div class="composer-inner">
           <textarea id="note-input" class="genko-input" placeholder="感想や気づきを貼り付け・入力…（Markdown対応：# 見出し / **太字** / - 箇条書き）" rows="3"></textarea>
           <div class="composer-row">
-            <span class="composer-hint" id="composer-hint">Enterで保存 / Shift+Enterで改行 / Markdown対応</span>
-            <div style="display:flex; gap:8px;">
-              <button class="chip-btn hidden" id="cancel-edit-note-btn">キャンセル</button>
-              <button class="send-btn" id="save-note-btn">保存</button>
-            </div>
+            <span class="composer-hint">Enterで保存 / Shift+Enterで改行 / Markdown対応</span>
+            <button class="send-btn" id="save-note-btn">保存</button>
           </div>
         </div>
       </div>
@@ -523,6 +542,18 @@
       <button class="btn btn-danger" id="confirm-ok">削除</button>
     </div>
   </div>
+</div>
+
+<!-- Full-screen note editor -->
+<div class="note-edit-overlay hidden" id="note-edit-overlay">
+  <div class="note-edit-header">
+    <span class="note-edit-title">メモを編集</span>
+    <div class="note-edit-header-actions">
+      <button class="btn btn-ghost" id="note-edit-cancel">キャンセル</button>
+      <button class="btn btn-primary" id="note-edit-save">更新</button>
+    </div>
+  </div>
+  <textarea class="note-edit-textarea" id="note-edit-textarea" placeholder="メモの内容（Ctrl+Enterで更新 / Escでキャンセル）"></textarea>
 </div>
 
 <script>
@@ -663,8 +694,10 @@
   const notesList = document.getElementById("notes-list");
   const noteInput = document.getElementById("note-input");
   const saveNoteBtn = document.getElementById("save-note-btn");
-  const cancelEditNoteBtn = document.getElementById("cancel-edit-note-btn");
-  const composerHint = document.getElementById("composer-hint");
+  const noteEditOverlay = document.getElementById("note-edit-overlay");
+  const noteEditTextarea = document.getElementById("note-edit-textarea");
+  const noteEditSaveBtn = document.getElementById("note-edit-save");
+  const noteEditCancelBtn = document.getElementById("note-edit-cancel");
 
   const modalOverlay = document.getElementById("modal-overlay");
   const modalHeading = document.getElementById("modal-heading");
@@ -774,7 +807,8 @@
     state.notes = await loadNotes(workId);
     state.noteCache[workId] = state.notes.slice();
     renderNotes();
-    cancelEditNote();
+    notesList.scrollTop = 0;
+    closeEditNote();
     noteInput.focus();
   }
 
@@ -1213,29 +1247,38 @@
     notesList.querySelectorAll("[data-note-edit]").forEach(btn => {
       btn.addEventListener("click", () => startEditNote(btn.getAttribute("data-note-edit")));
     });
-    notesList.scrollTop = notesList.scrollHeight;
   }
 
   function startEditNote(noteId) {
     const note = state.notes.find(n => n.id === noteId);
     if (!note) return;
     state.editingNoteId = noteId;
-    noteInput.value = note.content;
-    noteInput.focus();
-    saveNoteBtn.textContent = "更新";
-    composerHint.textContent = "編集中… Enterで更新 / Shift+Enterで改行";
-    cancelEditNoteBtn.classList.remove("hidden");
+    noteEditTextarea.value = note.content;
+    noteEditOverlay.classList.remove("hidden");
+    setTimeout(() => noteEditTextarea.focus(), 30);
   }
 
-  function cancelEditNote() {
+  function closeEditNote() {
     state.editingNoteId = null;
-    noteInput.value = "";
-    saveNoteBtn.textContent = "保存";
-    composerHint.textContent = "Enterで保存 / Shift+Enterで改行 / Markdown対応";
-    cancelEditNoteBtn.classList.add("hidden");
+    noteEditTextarea.value = "";
+    noteEditOverlay.classList.add("hidden");
   }
 
-  cancelEditNoteBtn.addEventListener("click", cancelEditNote);
+  async function handleUpdateNote() {
+    const text = noteEditTextarea.value.trim();
+    const noteId = state.editingNoteId;
+    if (!text || !noteId) { closeEditNote(); return; }
+    const note = state.notes.find(n => n.id === noteId);
+    if (note) note.content = text;
+    closeEditNote();
+    renderNotes();
+    await saveNotes(state.workId, state.notes);
+    state.noteCache[state.workId] = state.notes.slice();
+    await updateWorkTimestamp();
+  }
+
+  noteEditCancelBtn.addEventListener("click", closeEditNote);
+  noteEditSaveBtn.addEventListener("click", handleUpdateNote);
 
   async function updateWorkTimestamp() {
     const list = state.index[state.category] || [];
@@ -1247,21 +1290,10 @@
   async function handleSaveNote() {
     const text = noteInput.value.trim();
     if (!text) return;
-
-    if (state.editingNoteId) {
-      const note = state.notes.find(n => n.id === state.editingNoteId);
-      if (note) note.content = text;
-      cancelEditNote();
-      renderNotes();
-      await saveNotes(state.workId, state.notes);
-      state.noteCache[state.workId] = state.notes.slice();
-      await updateWorkTimestamp();
-      return;
-    }
-
     noteInput.value = "";
     state.notes.push({ id: genId("note"), content: text, ts: Date.now() });
     renderNotes();
+    notesList.scrollTop = notesList.scrollHeight;
     await saveNotes(state.workId, state.notes);
     state.noteCache[state.workId] = state.notes.slice();
     await updateWorkTimestamp();
@@ -1270,6 +1302,11 @@
   saveNoteBtn.addEventListener("click", handleSaveNote);
   noteInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSaveNote(); }
+  });
+
+  noteEditTextarea.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") { e.preventDefault(); closeEditNote(); }
+    else if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); handleUpdateNote(); }
   });
 
   // ---------- init ----------
