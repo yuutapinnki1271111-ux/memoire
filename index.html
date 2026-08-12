@@ -1,0 +1,1217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Mémoire</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600&family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #ffffff;
+    --surface: #fafafa;
+    --surface-alt: #f0f0f0;
+    --ink: #111111;
+    --muted: #767676;
+    --border: #e2e2e2;
+    --border-strong: #111111;
+    --gold: #b08d57;
+    --radius-s: 2px;
+    --radius-m: 3px;
+    --font-display: 'Jost', sans-serif;
+    --font-body: 'Noto Sans JP', sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); height: 100%; }
+  #app { min-height: 100vh; display: flex; flex-direction: column; }
+  .hidden { display: none !important; }
+  button { font-family: var(--font-display); cursor: pointer; }
+
+  button:focus-visible, input:focus-visible, textarea:focus-visible, .tile:focus-visible {
+    outline: 2px solid var(--ink); outline-offset: 2px;
+  }
+
+  /* ---------- Topbar ---------- */
+  .topbar {
+    display: flex; align-items: center; gap: 14px;
+    padding: 16px 22px; border-bottom: 1px solid var(--border); background: var(--bg);
+  }
+  .back-btn {
+    background: none; border: 1px solid var(--border); color: var(--muted);
+    border-radius: var(--radius-s); padding: 6px 13px; font-size: 11px;
+    letter-spacing: 0.08em; text-transform: uppercase; flex-shrink: 0;
+    transition: border-color 0.15s ease, color 0.15s ease;
+  }
+  .back-btn:hover { border-color: var(--ink); color: var(--ink); }
+
+  .topbar-main { flex: 1; min-width: 0; }
+  .topbar-title-row { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .topbar-title {
+    font-family: var(--font-body); font-size: 17px; font-weight: 500; letter-spacing: 0.01em;
+  }
+  .topbar-year { font-family: var(--font-display); font-size: 12px; color: var(--muted); letter-spacing: 0.04em; }
+  .topbar-sub { font-family: var(--font-display); font-size: 10.5px; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; margin-top: 2px; }
+
+  .topbar-actions { display: flex; gap: 8px; flex-shrink: 0; }
+  .chip-btn {
+    background: none; border: 1px solid var(--border); color: var(--muted);
+    border-radius: 20px; padding: 6px 13px; font-size: 10.5px; letter-spacing: 0.06em;
+    text-transform: uppercase; transition: border-color 0.15s ease, color 0.15s ease;
+  }
+  .chip-btn:hover { border-color: var(--ink); color: var(--ink); }
+  .chip-btn.danger:hover { border-color: #b8362a; color: #b8362a; }
+
+  .details-panel {
+    max-width: 720px; margin: 0 auto; padding: 0 22px;
+    font-family: var(--font-body); font-size: 12.5px; color: var(--muted);
+    line-height: 1.9; border-bottom: 1px solid var(--border);
+    white-space: pre-wrap;
+  }
+  .details-panel.hidden { display: none; }
+  .details-panel-inner { padding: 14px 0 18px; }
+
+  main { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+
+  /* ---------- HOME ---------- */
+  #view-home {
+    flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 56px 20px 40px; text-align: center;
+  }
+  .laurel-mark { width: 132px; height: auto; margin: 0 auto 4px; display: block; color: var(--gold); animation: fadeUp 0.6s ease both; }
+  .hero-title {
+    font-family: var(--font-display); font-weight: 500; font-size: clamp(40px, 7vw, 64px);
+    letter-spacing: 0.14em; text-transform: uppercase; margin: 0 0 60px; animation: fadeUp 0.6s ease 0.06s both;
+    position: relative; padding-bottom: 16px;
+  }
+  .hero-title::after {
+    content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--gold);
+  }
+
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+  .tiles { display: grid; grid-template-columns: repeat(4, minmax(110px, 155px)); justify-content: center; gap: 14px; animation: fadeUp 0.6s ease 0.15s both; }
+  .tile {
+    position: relative; background: var(--bg); border: 1px solid var(--border-strong);
+    border-radius: var(--radius-m); padding: 30px 12px 22px; display: flex; flex-direction: column;
+    align-items: center; gap: 8px; transition: background 0.18s ease, color 0.18s ease, transform 0.18s ease;
+  }
+  .tile-code { position: absolute; top: 8px; left: 10px; font-family: var(--font-display); font-size: 10px; letter-spacing: 0.1em; color: var(--muted); transition: color 0.18s ease; }
+  .tile-en { font-family: var(--font-display); font-size: 19px; letter-spacing: 0.06em; text-transform: uppercase; }
+  .tile:hover, .tile:focus-visible { background: var(--ink); color: #fff; transform: translateY(-2px); }
+  .tile:hover .tile-code, .tile:focus-visible .tile-code { color: #cfcfcf; }
+
+  /* ---------- LIST ---------- */
+  .toolbar { margin-bottom: 22px; }
+  .search-input {
+    width: 100%; background: var(--bg); color: var(--ink);
+    border: 1px solid var(--border); border-radius: var(--radius-s);
+    padding: 11px 13px; font-size: 14.5px; font-family: var(--font-body);
+    transition: border-color 0.15s ease;
+  }
+  .search-input:focus { outline: none; border-color: var(--ink); }
+  .search-input::placeholder { color: #b5b5b5; }
+
+  .sort-row { display: flex; align-items: center; gap: 7px; margin-top: 11px; flex-wrap: wrap; }
+  .sort-label {
+    font-family: var(--font-display); font-size: 10px; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--muted); margin-right: 2px;
+  }
+  .sort-btn {
+    background: none; border: 1px solid var(--border); color: var(--muted);
+    border-radius: 20px; padding: 5px 12px; font-family: var(--font-body);
+    font-size: 11.5px; letter-spacing: 0.02em;
+    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+  }
+  .sort-btn:hover { border-color: var(--ink); color: var(--ink); }
+  .sort-btn.is-active { background: var(--ink); border-color: var(--ink); color: #fff; }
+
+  .unlock-btn {
+    background: none; border: none; padding: 6px 0 0; color: var(--muted);
+    font-family: var(--font-body); font-size: 11.5px; text-decoration: underline;
+  }
+  .unlock-btn:hover { color: var(--ink); }
+
+  .series-tag {
+    font-family: var(--font-display); font-size: 9.5px; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--gold); border: 1px solid var(--gold);
+    border-radius: 20px; padding: 2px 7px; margin-left: 9px; vertical-align: 2px;
+  }
+
+  .result-head {
+    font-family: var(--font-display); font-size: 10px; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--muted); margin: 4px 0 10px;
+  }
+  .snippet {
+    font-size: 12.5px; color: var(--muted); line-height: 1.7; margin-top: 5px;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  mark { background: rgba(176,141,87,0.28); color: inherit; padding: 0 1px; }
+
+  #view-list, #view-series { flex: 1; display: flex; flex-direction: column; }
+  .list-body { flex: 1; max-width: 640px; width: 100%; margin: 0 auto; padding: 26px 22px 60px; }
+
+  .new-work-btn {
+    display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%;
+    background: var(--bg); border: 1px dashed var(--border-strong); color: var(--ink);
+    border-radius: var(--radius-m); padding: 15px 18px; font-size: 12px; letter-spacing: 0.1em;
+    text-transform: uppercase; margin-bottom: 26px; transition: background 0.15s ease, color 0.15s ease;
+  }
+  .new-work-btn:hover { background: var(--ink); color: #fff; }
+
+  .entry-row {
+    display: flex; align-items: center; gap: 10px;
+    border-bottom: 1px solid var(--border); padding: 4px 0;
+  }
+  .entry-main {
+    flex: 1; min-width: 0; display: flex; align-items: baseline; justify-content: space-between; gap: 14px;
+    background: none; border: none; padding: 15px 4px; text-align: left; color: var(--ink);
+    font-family: var(--font-body); transition: opacity 0.15s ease;
+  }
+  .entry-main:hover { opacity: 0.55; }
+  .entry-titlewrap { min-width: 0; }
+  .entry-title { font-size: 15px; letter-spacing: 0.01em; }
+  .entry-title .entry-year { font-family: var(--font-display); color: var(--muted); font-size: 12px; margin-left: 8px; }
+  .entry-meta { font-family: var(--font-display); font-size: 10.5px; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; margin-top: 3px; }
+  .entry-date { font-family: var(--font-display); font-size: 11px; color: var(--muted); white-space: nowrap; letter-spacing: 0.04em; flex-shrink: 0; }
+
+  .entry-del {
+    flex-shrink: 0; width: 26px; height: 26px; border: 1px solid var(--border); background: var(--bg);
+    color: var(--muted); border-radius: 50%; font-size: 13px; line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+    transition: border-color 0.15s ease, color 0.15s ease;
+  }
+  .entry-del:hover { border-color: #b8362a; color: #b8362a; }
+
+  .list-empty { text-align: center; padding: 60px 10px 20px; color: var(--muted); font-size: 12.5px; line-height: 1.9; }
+  .list-empty .empty-code { font-family: var(--font-display); font-size: 11px; letter-spacing: 0.2em; color: var(--border-strong); display: block; margin-bottom: 14px; }
+
+  /* ---------- WORK VIEW ---------- */
+  #view-work { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+
+  .notes-list {
+    flex: 1; overflow-y: auto; padding: 26px 20px 10px;
+    display: flex; flex-direction: column; gap: 18px; max-width: 720px; width: 100%; margin: 0 auto;
+  }
+  .notes-empty { text-align: center; color: var(--muted); font-size: 12.5px; line-height: 2; padding: 40px 20px; font-family: var(--font-body); }
+
+  .note-card { position: relative; background: var(--surface); border-radius: var(--radius-m); padding: 14px 16px; }
+  .note-content { font-size: 14.5px; line-height: 1.85; letter-spacing: 0.01em; white-space: pre-wrap; padding-right: 22px; }
+
+  /* ---------- Markdown rendering within notes ---------- */
+  .note-content.markdown-body { white-space: normal; }
+  .markdown-body h1, .markdown-body h2, .markdown-body h3,
+  .markdown-body h4, .markdown-body h5, .markdown-body h6 {
+    font-family: var(--font-display); font-weight: 500; color: var(--ink);
+    line-height: 1.4; margin: 0.9em 0 0.4em;
+  }
+  .markdown-body h1:first-child, .markdown-body h2:first-child, .markdown-body h3:first-child { margin-top: 0; }
+  .markdown-body h1 { font-size: 22px; letter-spacing: 0.02em; }
+  .markdown-body h2 { font-size: 18px; letter-spacing: 0.02em; }
+  .markdown-body h3 { font-size: 15.5px; letter-spacing: 0.02em; }
+  .markdown-body h4, .markdown-body h5, .markdown-body h6 { font-size: 14px; font-family: var(--font-body); font-weight: 700; }
+  .markdown-body p { margin: 0 0 0.7em; }
+  .markdown-body p:last-child { margin-bottom: 0; }
+  .markdown-body strong { font-weight: 700; }
+  .markdown-body em { font-style: italic; }
+  .markdown-body ul, .markdown-body ol { margin: 0 0 0.7em; padding-left: 1.3em; }
+  .markdown-body li { margin: 0.25em 0; }
+  .markdown-body li > ul, .markdown-body li > ol { margin: 0.25em 0 0; }
+  .markdown-body blockquote {
+    margin: 0 0 0.7em; padding: 2px 0 2px 14px; border-left: 2px solid var(--border-strong);
+    color: var(--muted);
+  }
+  .markdown-body hr { border: none; border-top: 1px solid var(--border); margin: 1em 0; }
+  .markdown-body code {
+    font-family: 'Courier New', monospace; font-size: 0.9em; background: var(--surface-alt);
+    padding: 1px 5px; border-radius: 2px;
+  }
+  .markdown-body pre {
+    background: var(--surface-alt); padding: 12px 14px; border-radius: var(--radius-s);
+    overflow-x: auto; margin: 0 0 0.7em;
+  }
+  .markdown-body pre code { background: none; padding: 0; }
+  .markdown-body a { color: var(--ink); text-decoration: underline; }
+  .markdown-body table { border-collapse: collapse; margin: 0 0 0.7em; font-size: 0.95em; }
+  .markdown-body th, .markdown-body td { border: 1px solid var(--border); padding: 5px 10px; text-align: left; }
+  .markdown-body img { max-width: 100%; border-radius: var(--radius-s); }
+  .note-time { font-family: var(--font-display); font-size: 10px; color: var(--muted); margin-top: 8px; letter-spacing: 0.05em; }
+  .note-del {
+    position: absolute; top: 10px; right: 10px; width: 20px; height: 20px; border: none; background: none;
+    color: var(--muted); font-size: 14px; line-height: 1; padding: 0;
+  }
+  .note-del:hover { color: #b8362a; }
+
+  /* ---------- Composer ---------- */
+  .composer { border-top: 1px solid var(--border); background: var(--bg); padding: 16px 20px 20px; }
+  .composer-inner { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 10px; }
+
+  .genko-input {
+    width: 100%; min-height: 96px; max-height: 220px; resize: vertical;
+    font-family: var(--font-body); font-size: 15.5px; line-height: 28px; color: var(--ink);
+    background-color: var(--bg);
+    background-image:
+      repeating-linear-gradient(to bottom, transparent 0, transparent 27px, rgba(0,0,0,0.07) 27px, rgba(0,0,0,0.07) 28px),
+      repeating-linear-gradient(to right, transparent 0, transparent 27px, rgba(0,0,0,0.04) 27px, rgba(0,0,0,0.04) 28px);
+    padding: 6px 12px; border: 1px solid var(--border); border-radius: var(--radius-s);
+    transition: border-color 0.15s ease;
+  }
+  .genko-input:focus { border-color: var(--ink); outline: none; }
+  .genko-input::placeholder { color: #b5b5b5; }
+
+  .composer-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  .composer-hint { font-family: var(--font-display); font-size: 10.5px; color: var(--muted); letter-spacing: 0.03em; text-transform: uppercase; }
+
+  .send-btn {
+    background: var(--ink); color: #fff; border: 1px solid var(--ink); border-radius: var(--radius-s);
+    padding: 10px 24px; font-size: 11.5px; letter-spacing: 0.12em; text-transform: uppercase;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+  .send-btn:hover:not(:disabled) { background: #fff; color: var(--ink); }
+  .send-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  /* ---------- Modal ---------- */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(17,17,17,0.5); display: flex;
+    align-items: center; justify-content: center; z-index: 50; padding: 20px;
+  }
+  .modal { background: var(--bg); border: 1px solid var(--border-strong); border-radius: var(--radius-m); padding: 26px 24px; width: 100%; max-width: 380px; max-height: 88vh; overflow-y: auto; }
+  .modal h3 { font-family: var(--font-display); font-weight: 500; margin: 0 0 6px; font-size: 15px; letter-spacing: 0.08em; text-transform: uppercase; }
+  .modal-desc { font-size: 12px; color: var(--muted); margin: 0 0 18px; font-family: var(--font-body); }
+
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-family: var(--font-display); font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+  .field input, .field textarea {
+    width: 100%; background: var(--bg); color: var(--ink); border: 1px solid var(--border);
+    border-bottom: 1px solid var(--ink); border-radius: 0; padding: 9px 4px; font-size: 14.5px; font-family: var(--font-body);
+  }
+  .field textarea { resize: vertical; min-height: 56px; line-height: 1.6; }
+  .field input:focus, .field textarea:focus { outline: none; border-bottom-width: 2px; }
+  .field-locked { font-size: 13.5px; color: var(--muted); padding: 9px 4px; border-bottom: 1px solid var(--border); font-family: var(--font-body); }
+
+  .modal-error { color: #b8362a; font-size: 11.5px; margin-top: -8px; margin-bottom: 10px; min-height: 14px; font-family: var(--font-body); }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+  .btn { border-radius: var(--radius-s); padding: 9px 18px; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; border: 1px solid var(--ink); }
+  .btn-ghost { background: none; color: var(--ink); }
+  .btn-ghost:hover { background: var(--surface-alt); }
+  .btn-primary { background: var(--ink); color: #fff; }
+  .btn-primary:hover { background: #333; }
+  .btn-danger { background: #b8362a; color: #fff; border-color: #b8362a; }
+  .btn-danger:hover { background: #96271d; }
+
+  .notes-list::-webkit-scrollbar { width: 8px; }
+  .notes-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  @media (max-width: 560px) {
+    .tiles { grid-template-columns: repeat(2, minmax(110px, 1fr)); }
+  }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
+<body>
+
+<div id="app">
+
+  <div class="topbar hidden" id="topbar">
+    <button class="back-btn" id="back-btn">← 戻る</button>
+    <div class="topbar-main">
+      <div class="topbar-title-row">
+        <span class="topbar-title" id="topbar-title"></span>
+        <span class="topbar-year" id="topbar-year"></span>
+      </div>
+      <div class="topbar-sub" id="topbar-sub"></div>
+    </div>
+    <div class="topbar-actions" id="topbar-actions"></div>
+  </div>
+
+  <div class="details-panel hidden" id="details-panel">
+    <div class="details-panel-inner" id="details-panel-inner"></div>
+  </div>
+
+  <main>
+    <!-- HOME -->
+    <section id="view-home" class="view">
+      <svg class="laurel-mark" viewBox="0 0 160 160" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M0 0 C 4.0 -3.1, 10.3 -3.1, 14.3 0 C 10.3 3.1, 4.0 3.1, 0 0 Z" transform="translate(60.8 31.4) rotate(-52.0)"/>
+        <path d="M0 0 C 2.9 -2.4, 7.5 -2.4, 10.5 0 C 7.5 2.4, 2.9 2.4, 0 0 Z" transform="translate(64.8 42.2) rotate(-52.0)"/>
+        <path d="M0 0 C 4.8 -3.7, 12.3 -3.7, 17.0 0 C 12.3 3.7, 4.8 3.7, 0 0 Z" transform="translate(52.0 35.5) rotate(-62.0)"/>
+        <path d="M0 0 C 3.5 -2.9, 9.0 -2.9, 12.4 0 C 9.0 2.9, 3.5 2.9, 0 0 Z" transform="translate(57.8 45.5) rotate(-62.0)"/>
+        <path d="M0 0 C 5.5 -4.2, 14.1 -4.2, 19.6 0 C 14.1 4.2, 5.5 4.2, 0 0 Z" transform="translate(44.0 41.1) rotate(-72.0)"/>
+        <path d="M0 0 C 4.0 -3.3, 10.3 -3.3, 14.3 0 C 10.3 3.3, 4.0 3.3, 0 0 Z" transform="translate(51.4 49.9) rotate(-72.0)"/>
+        <path d="M0 0 C 6.1 -4.7, 15.7 -4.7, 21.9 0 C 15.7 4.7, 6.1 4.7, 0 0 Z" transform="translate(37.1 48.0) rotate(-82.0)"/>
+        <path d="M0 0 C 4.5 -3.7, 11.5 -3.7, 16.0 0 C 11.5 3.7, 4.5 3.7, 0 0 Z" transform="translate(45.9 55.4) rotate(-82.0)"/>
+        <path d="M0 0 C 6.6 -5.1, 17.1 -5.1, 23.7 0 C 17.1 5.1, 6.6 5.1, 0 0 Z" transform="translate(31.5 56.0) rotate(-92.0)"/>
+        <path d="M0 0 C 4.9 -4.0, 12.5 -4.0, 17.3 0 C 12.5 4.0, 4.9 4.0, 0 0 Z" transform="translate(41.5 61.8) rotate(-92.0)"/>
+        <path d="M0 0 C 7.0 -5.4, 18.1 -5.4, 25.1 0 C 18.1 5.4, 7.0 5.4, 0 0 Z" transform="translate(27.4 64.8) rotate(-102.0)"/>
+        <path d="M0 0 C 5.1 -4.2, 13.2 -4.2, 18.3 0 C 13.2 4.2, 5.1 4.2, 0 0 Z" transform="translate(38.2 68.8) rotate(-102.0)"/>
+        <path d="M0 0 C 7.2 -5.6, 18.6 -5.6, 25.8 0 C 18.6 5.6, 7.2 5.6, 0 0 Z" transform="translate(24.9 74.3) rotate(-112.0)"/>
+        <path d="M0 0 C 5.3 -4.4, 13.6 -4.4, 18.9 0 C 13.6 4.4, 5.3 4.4, 0 0 Z" transform="translate(36.2 76.3) rotate(-112.0)"/>
+        <path d="M0 0 C 7.3 -5.6, 18.7 -5.6, 26.0 0 C 18.7 5.6, 7.3 5.6, 0 0 Z" transform="translate(24.0 84.0) rotate(-122.0)"/>
+        <path d="M0 0 C 5.3 -4.4, 13.7 -4.4, 19.0 0 C 13.7 4.4, 5.3 4.4, 0 0 Z" transform="translate(35.5 84.0) rotate(-122.0)"/>
+        <path d="M0 0 C 7.1 -5.5, 18.3 -5.5, 25.5 0 C 18.3 5.5, 7.1 5.5, 0 0 Z" transform="translate(24.9 93.7) rotate(-132.0)"/>
+        <path d="M0 0 C 5.2 -4.3, 13.4 -4.3, 18.6 0 C 13.4 4.3, 5.2 4.3, 0 0 Z" transform="translate(36.2 91.7) rotate(-132.0)"/>
+        <path d="M0 0 C 6.8 -5.2, 17.5 -5.2, 24.3 0 C 17.5 5.2, 6.8 5.2, 0 0 Z" transform="translate(27.4 103.2) rotate(-142.0)"/>
+        <path d="M0 0 C 5.0 -4.1, 12.8 -4.1, 17.8 0 C 12.8 4.1, 5.0 4.1, 0 0 Z" transform="translate(38.2 99.2) rotate(-142.0)"/>
+        <path d="M0 0 C 6.3 -4.9, 16.3 -4.9, 22.7 0 C 16.3 4.9, 6.3 4.9, 0 0 Z" transform="translate(31.5 112.0) rotate(-152.0)"/>
+        <path d="M0 0 C 4.6 -3.8, 11.9 -3.8, 16.6 0 C 11.9 3.8, 4.6 3.8, 0 0 Z" transform="translate(41.5 106.2) rotate(-152.0)"/>
+        <path d="M0 0 C 5.7 -4.4, 14.8 -4.4, 20.5 0 C 14.8 4.4, 5.7 4.4, 0 0 Z" transform="translate(37.1 120.0) rotate(-162.0)"/>
+        <path d="M0 0 C 4.2 -3.5, 10.8 -3.5, 15.0 0 C 10.8 3.5, 4.2 3.5, 0 0 Z" transform="translate(45.9 112.6) rotate(-162.0)"/>
+        <path d="M0 0 C 5.1 -3.9, 13.0 -3.9, 18.1 0 C 13.0 3.9, 5.1 3.9, 0 0 Z" transform="translate(44.0 126.9) rotate(-172.0)"/>
+        <path d="M0 0 C 3.7 -3.1, 9.5 -3.1, 13.2 0 C 9.5 3.1, 3.7 3.1, 0 0 Z" transform="translate(51.4 118.1) rotate(-172.0)"/>
+        <path d="M0 0 C 4.3 -3.3, 11.1 -3.3, 15.4 0 C 11.1 3.3, 4.3 3.3, 0 0 Z" transform="translate(52.0 132.5) rotate(-182.0)"/>
+        <path d="M0 0 C 3.1 -2.6, 8.1 -2.6, 11.2 0 C 8.1 2.6, 3.1 2.6, 0 0 Z" transform="translate(57.8 122.5) rotate(-182.0)"/>
+        <path d="M0 0 C 4.0 -3.1, 10.3 -3.1, 14.3 0 C 10.3 3.1, 4.0 3.1, 0 0 Z" transform="translate(60.8 136.6) rotate(-192.0)"/>
+        <path d="M0 0 C 2.9 -2.4, 7.5 -2.4, 10.5 0 C 7.5 2.4, 2.9 2.4, 0 0 Z" transform="translate(64.8 125.8) rotate(-192.0)"/>
+        <path d="M0 0 C 4.0 -3.1, 10.3 -3.1, 14.3 0 C 10.3 3.1, 4.0 3.1, 0 0 Z" transform="translate(70.3 139.1) rotate(-202.0)"/>
+        <path d="M0 0 C 2.9 -2.4, 7.5 -2.4, 10.5 0 C 7.5 2.4, 2.9 2.4, 0 0 Z" transform="translate(72.3 127.8) rotate(-202.0)"/>
+        <path d="M0 0 C 4.0 -3.1, 10.3 -3.1, 14.3 0 C 10.3 3.1, 4.0 3.1, 0 0 Z" transform="translate(99.2 31.4) rotate(-128.0)"/>
+        <path d="M0 0 C 2.9 -2.4, 7.5 -2.4, 10.5 0 C 7.5 2.4, 2.9 2.4, 0 0 Z" transform="translate(95.2 42.2) rotate(-128.0)"/>
+        <path d="M0 0 C 4.8 -3.7, 12.3 -3.7, 17.0 0 C 12.3 3.7, 4.8 3.7, 0 0 Z" transform="translate(108.0 35.5) rotate(-118.0)"/>
+        <path d="M0 0 C 3.5 -2.9, 9.0 -2.9, 12.4 0 C 9.0 2.9, 3.5 2.9, 0 0 Z" transform="translate(102.2 45.5) rotate(-118.0)"/>
+        <path d="M0 0 C 5.5 -4.2, 14.1 -4.2, 19.6 0 C 14.1 4.2, 5.5 4.2, 0 0 Z" transform="translate(116.0 41.1) rotate(-108.0)"/>
+        <path d="M0 0 C 4.0 -3.3, 10.3 -3.3, 14.3 0 C 10.3 3.3, 4.0 3.3, 0 0 Z" transform="translate(108.6 49.9) rotate(-108.0)"/>
+        <path d="M0 0 C 6.1 -4.7, 15.7 -4.7, 21.9 0 C 15.7 4.7, 6.1 4.7, 0 0 Z" transform="translate(122.9 48.0) rotate(-98.0)"/>
+        <path d="M0 0 C 4.5 -3.7, 11.5 -3.7, 16.0 0 C 11.5 3.7, 4.5 3.7, 0 0 Z" transform="translate(114.1 55.4) rotate(-98.0)"/>
+        <path d="M0 0 C 6.6 -5.1, 17.1 -5.1, 23.7 0 C 17.1 5.1, 6.6 5.1, 0 0 Z" transform="translate(128.5 56.0) rotate(-88.0)"/>
+        <path d="M0 0 C 4.9 -4.0, 12.5 -4.0, 17.3 0 C 12.5 4.0, 4.9 4.0, 0 0 Z" transform="translate(118.5 61.8) rotate(-88.0)"/>
+        <path d="M0 0 C 7.0 -5.4, 18.1 -5.4, 25.1 0 C 18.1 5.4, 7.0 5.4, 0 0 Z" transform="translate(132.6 64.8) rotate(-78.0)"/>
+        <path d="M0 0 C 5.1 -4.2, 13.2 -4.2, 18.3 0 C 13.2 4.2, 5.1 4.2, 0 0 Z" transform="translate(121.8 68.8) rotate(-78.0)"/>
+        <path d="M0 0 C 7.2 -5.6, 18.6 -5.6, 25.8 0 C 18.6 5.6, 7.2 5.6, 0 0 Z" transform="translate(135.1 74.3) rotate(-68.0)"/>
+        <path d="M0 0 C 5.3 -4.4, 13.6 -4.4, 18.9 0 C 13.6 4.4, 5.3 4.4, 0 0 Z" transform="translate(123.8 76.3) rotate(-68.0)"/>
+        <path d="M0 0 C 7.3 -5.6, 18.7 -5.6, 26.0 0 C 18.7 5.6, 7.3 5.6, 0 0 Z" transform="translate(136.0 84.0) rotate(-58.0)"/>
+        <path d="M0 0 C 5.3 -4.4, 13.7 -4.4, 19.0 0 C 13.7 4.4, 5.3 4.4, 0 0 Z" transform="translate(124.5 84.0) rotate(-58.0)"/>
+        <path d="M0 0 C 7.1 -5.5, 18.3 -5.5, 25.5 0 C 18.3 5.5, 7.1 5.5, 0 0 Z" transform="translate(135.1 93.7) rotate(-48.0)"/>
+        <path d="M0 0 C 5.2 -4.3, 13.4 -4.3, 18.6 0 C 13.4 4.3, 5.2 4.3, 0 0 Z" transform="translate(123.8 91.7) rotate(-48.0)"/>
+        <path d="M0 0 C 6.8 -5.2, 17.5 -5.2, 24.3 0 C 17.5 5.2, 6.8 5.2, 0 0 Z" transform="translate(132.6 103.2) rotate(-38.0)"/>
+        <path d="M0 0 C 5.0 -4.1, 12.8 -4.1, 17.8 0 C 12.8 4.1, 5.0 4.1, 0 0 Z" transform="translate(121.8 99.2) rotate(-38.0)"/>
+        <path d="M0 0 C 6.3 -4.9, 16.3 -4.9, 22.7 0 C 16.3 4.9, 6.3 4.9, 0 0 Z" transform="translate(128.5 112.0) rotate(-28.0)"/>
+        <path d="M0 0 C 4.6 -3.8, 11.9 -3.8, 16.6 0 C 11.9 3.8, 4.6 3.8, 0 0 Z" transform="translate(118.5 106.2) rotate(-28.0)"/>
+        <path d="M0 0 C 5.7 -4.4, 14.8 -4.4, 20.5 0 C 14.8 4.4, 5.7 4.4, 0 0 Z" transform="translate(122.9 120.0) rotate(-18.0)"/>
+        <path d="M0 0 C 4.2 -3.5, 10.8 -3.5, 15.0 0 C 10.8 3.5, 4.2 3.5, 0 0 Z" transform="translate(114.1 112.6) rotate(-18.0)"/>
+        <path d="M0 0 C 5.1 -3.9, 13.0 -3.9, 18.1 0 C 13.0 3.9, 5.1 3.9, 0 0 Z" transform="translate(116.0 126.9) rotate(-8.0)"/>
+        <path d="M0 0 C 3.7 -3.1, 9.5 -3.1, 13.2 0 C 9.5 3.1, 3.7 3.1, 0 0 Z" transform="translate(108.6 118.1) rotate(-8.0)"/>
+        <path d="M0 0 C 4.3 -3.3, 11.1 -3.3, 15.4 0 C 11.1 3.3, 4.3 3.3, 0 0 Z" transform="translate(108.0 132.5) rotate(2.0)"/>
+        <path d="M0 0 C 3.1 -2.6, 8.1 -2.6, 11.2 0 C 8.1 2.6, 3.1 2.6, 0 0 Z" transform="translate(102.2 122.5) rotate(2.0)"/>
+        <path d="M0 0 C 4.0 -3.1, 10.3 -3.1, 14.3 0 C 10.3 3.1, 4.0 3.1, 0 0 Z" transform="translate(99.2 136.6) rotate(12.0)"/>
+        <path d="M0 0 C 2.9 -2.4, 7.5 -2.4, 10.5 0 C 7.5 2.4, 2.9 2.4, 0 0 Z" transform="translate(95.2 125.8) rotate(12.0)"/>
+        <path d="M0 0 C 4.0 -3.1, 10.3 -3.1, 14.3 0 C 10.3 3.1, 4.0 3.1, 0 0 Z" transform="translate(89.7 139.1) rotate(22.0)"/>
+        <path d="M0 0 C 2.9 -2.4, 7.5 -2.4, 10.5 0 C 7.5 2.4, 2.9 2.4, 0 0 Z" transform="translate(87.7 127.8) rotate(22.0)"/>
+        <circle cx="59.3" cy="122.8" r="2.1"/>
+        <circle cx="67.1" cy="126.1" r="2.1"/>
+        <circle cx="100.7" cy="122.8" r="2.1"/>
+        <circle cx="92.9" cy="126.1" r="2.1"/>
+      </svg>
+      <h1 class="hero-title">Mémoire</h1>
+      <div class="tiles">
+        <button class="tile" data-cat="anime"><span class="tile-code">AN</span><span class="tile-en">Anime</span></button>
+        <button class="tile" data-cat="art"><span class="tile-code">AR</span><span class="tile-en">Art</span></button>
+        <button class="tile" data-cat="book"><span class="tile-code">BK</span><span class="tile-en">Books</span></button>
+        <button class="tile" data-cat="epic"><span class="tile-code">EP</span><span class="tile-en">Epic</span></button>
+        <button class="tile" data-cat="movie"><span class="tile-code">FM</span><span class="tile-en">Film</span></button>
+        <button class="tile" data-cat="music"><span class="tile-code">MU</span><span class="tile-en">Music</span></button>
+        <button class="tile" data-cat="nature"><span class="tile-code">NT</span><span class="tile-en">Nature</span></button>
+        <button class="tile" data-cat="science"><span class="tile-code">SC</span><span class="tile-en">Science</span></button>
+      </div>
+    </section>
+
+    <!-- CATEGORY LIST (series + standalone works) -->
+    <section id="view-list" class="view hidden">
+      <div class="list-body">
+        <div class="toolbar">
+          <input id="search-input" class="search-input" type="search" placeholder="タイトル・本文を検索…" />
+          <div class="sort-row">
+            <span class="sort-label">表示</span>
+            <button class="sort-btn v-mode is-active" data-vmode="grouped">シリーズ別</button>
+            <button class="sort-btn v-mode" data-vmode="flat">すべて展開</button>
+          </div>
+          <div class="sort-row">
+            <span class="sort-label">並び替え</span>
+            <button class="sort-btn is-active" data-sort="updated">更新順</button>
+            <button class="sort-btn" data-sort="title">タイトル順</button>
+            <button class="sort-btn" data-sort="year">年代順</button>
+          </div>
+        </div>
+        <button class="new-work-btn" id="new-work-btn">＋ 新規作成</button>
+        <div id="list-container"></div>
+      </div>
+    </section>
+
+    <!-- SERIES VIEW (works within one series) -->
+    <section id="view-series" class="view hidden">
+      <div class="list-body">
+        <div class="toolbar">
+          <div class="sort-row">
+            <span class="sort-label">並び替え</span>
+            <button class="sort-btn s-sort is-active" data-ssort="year">年代順</button>
+            <button class="sort-btn s-sort" data-ssort="title">タイトル順</button>
+            <button class="sort-btn s-sort" data-ssort="updated">更新順</button>
+          </div>
+        </div>
+        <button class="new-work-btn" id="new-work-in-series-btn">＋ 新規作成</button>
+        <div id="series-container"></div>
+      </div>
+    </section>
+
+    <!-- WORK VIEW (notes) -->
+    <section id="view-work" class="view hidden">
+      <div class="notes-list" id="notes-list"></div>
+      <div class="composer">
+        <div class="composer-inner">
+          <textarea id="note-input" class="genko-input" placeholder="感想や気づきを貼り付け・入力…（Markdown対応：# 見出し / **太字** / - 箇条書き）" rows="3"></textarea>
+          <div class="composer-row">
+            <span class="composer-hint">Enterで保存 / Shift+Enterで改行 / Markdown対応</span>
+            <button class="send-btn" id="save-note-btn">保存</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- Create entry modal -->
+<div class="modal-overlay hidden" id="modal-overlay">
+  <div class="modal">
+    <h3 id="modal-heading">新規作成</h3>
+    <p class="modal-desc" id="modal-subdesc">タイトルを入力してください。シリーズや詳細は後からでも追加できます。</p>
+
+    <div class="field">
+      <label for="f-title">タイトル</label>
+      <input id="f-title" type="text" maxlength="80" placeholder="例：攻殻機動隊 ARISE" />
+    </div>
+
+    <div class="field" id="f-series-field">
+      <label for="f-series">シリーズ（任意）</label>
+      <input id="f-series" type="text" maxlength="60" list="series-options" placeholder="例：攻殻機動隊" />
+      <datalist id="series-options"></datalist>
+    </div>
+    <div class="field hidden" id="f-series-locked-field">
+      <label>シリーズ</label>
+      <div class="field-locked" id="f-series-locked"></div>
+      <button type="button" class="unlock-btn" id="f-series-unlock">シリーズを変更する</button>
+    </div>
+
+    <div class="field">
+      <label for="f-year">年（任意）</label>
+      <input id="f-year" type="text" maxlength="20" placeholder="例：2013" />
+    </div>
+
+    <div class="field">
+      <label for="f-credits">詳細（任意）— 監督・キャスト・制作会社など</label>
+      <textarea id="f-credits" maxlength="600" placeholder="例：監督 黄瀬和哉 / Production I.G"></textarea>
+    </div>
+
+    <div class="modal-error" id="modal-error"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="modal-cancel">キャンセル</button>
+      <button class="btn btn-primary" id="modal-confirm">作成</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete confirm modal -->
+<div class="modal-overlay hidden" id="confirm-overlay">
+  <div class="modal">
+    <h3 id="confirm-title">削除しますか？</h3>
+    <p class="modal-desc" id="confirm-desc">この操作は元に戻せません。</p>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="confirm-cancel">キャンセル</button>
+      <button class="btn btn-danger" id="confirm-ok">削除</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // localStorage adapter (replaces window.storage from the original runtime)
+  if (!window.storage) {
+    window.storage = {
+      get: function(key) {
+        var v = localStorage.getItem(key);
+        return Promise.resolve(v !== null ? { value: v } : null);
+      },
+      set: function(key, value) {
+        try { localStorage.setItem(key, value); } catch(e) { console.error(e); }
+        return Promise.resolve();
+      },
+      delete: function(key) {
+        localStorage.removeItem(key);
+        return Promise.resolve();
+      }
+    };
+  }
+
+  const CATEGORIES = {
+    book:    { labelEn: "Books",   code: "BK", groupLabel: "作家名",       groupPlaceholder: "例：村上春樹",        groupTag: "作家" },
+    movie:   { labelEn: "Film",    code: "FM", groupLabel: "シリーズ",     groupPlaceholder: "例：マトリックス",    groupTag: "シリーズ" },
+    anime:   { labelEn: "Anime",   code: "AN", groupLabel: "シリーズ",     groupPlaceholder: "例：攻殻機動隊",      groupTag: "シリーズ" },
+    art:     { labelEn: "Art",     code: "AR", groupLabel: "作家・様式",   groupPlaceholder: "例：モネ／印象派",    groupTag: "作家" },
+    epic:    { labelEn: "Epic",    code: "EP", groupLabel: "時代・文明",   groupPlaceholder: "例：古代ギリシャ",    groupTag: "時代" },
+    music:   { labelEn: "Music",   code: "MU", groupLabel: "アーティスト", groupPlaceholder: "例：坂本龍一",        groupTag: "アーティスト" },
+    nature:  { labelEn: "Nature",  code: "NT", groupLabel: "分類・テーマ", groupPlaceholder: "例：恐竜／深海生物",  groupTag: "分類" },
+    science: { labelEn: "Science", code: "SC", groupLabel: "分野・テーマ", groupPlaceholder: "例：宇宙論／量子力学", groupTag: "分野" }
+  };
+
+  const state = {
+    view: "home",
+    category: null,
+    seriesName: null,
+    workId: null,
+    index: null,
+    notes: [],
+    pendingDelete: null, // { kind: 'work'|'note', ... }
+    query: "",
+    sortMode: "updated", // 'updated' | 'title' | 'year'
+    seriesSortMode: "year", // シリーズ内は年代順が既定
+    viewMode: "grouped",    // 'grouped'(シリーズ別) | 'flat'(すべて展開)
+    noteCache: {},       // workId -> notes[] (for full-text search)
+    editingId: null      // 編集中の作品ID
+  };
+
+  // ---------- storage ----------
+  function defaultIndex() { return { book: [], movie: [], anime: [], art: [], epic: [], music: [], nature: [], science: [] }; }
+  async function loadIndex() {
+    try { const res = await window.storage.get("works-index"); return res ? JSON.parse(res.value) : defaultIndex(); }
+    catch (e) { return defaultIndex(); }
+  }
+  async function saveIndex(idx) {
+    try { await window.storage.set("works-index", JSON.stringify(idx)); }
+    catch (e) { console.error("index save failed", e); }
+  }
+  async function loadNotes(workId) {
+    try { const res = await window.storage.get("notes:" + workId); return res ? JSON.parse(res.value) : []; }
+    catch (e) { return []; }
+  }
+  async function saveNotes(workId, notes) {
+    try { await window.storage.set("notes:" + workId, JSON.stringify(notes)); }
+    catch (e) { console.error("notes save failed", e); }
+  }
+  async function deleteNotesKey(workId) {
+    try { await window.storage.delete("notes:" + workId); } catch (e) { /* ignore */ }
+  }
+
+  // ---------- utils ----------
+  function escapeHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str;
+    return div.innerHTML;
+  }
+  function formatDate(ts) {
+    return new Date(ts).toLocaleDateString("ja-JP", { year: "numeric", month: "2-digit", day: "2-digit" });
+  }
+  function formatTime(ts) {
+    return new Date(ts).toLocaleString("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  }
+  function genId(category) {
+    return category + "-" + Date.now() + "-" + Math.random().toString(36).slice(2, 7);
+  }
+
+  // ---------- DOM refs ----------
+  const topbar = document.getElementById("topbar");
+  const topbarTitle = document.getElementById("topbar-title");
+  const topbarYear = document.getElementById("topbar-year");
+  const topbarSub = document.getElementById("topbar-sub");
+  const topbarActions = document.getElementById("topbar-actions");
+  const backBtn = document.getElementById("back-btn");
+
+  const detailsPanel = document.getElementById("details-panel");
+  const detailsPanelInner = document.getElementById("details-panel-inner");
+
+  const viewHome = document.getElementById("view-home");
+  const viewList = document.getElementById("view-list");
+  const viewSeries = document.getElementById("view-series");
+  const viewWork = document.getElementById("view-work");
+
+  const listContainer = document.getElementById("list-container");
+  const seriesContainer = document.getElementById("series-container");
+  const newWorkBtn = document.getElementById("new-work-btn");
+  const newWorkInSeriesBtn = document.getElementById("new-work-in-series-btn");
+  const searchInput = document.getElementById("search-input");
+  const sortBtns = Array.from(document.querySelectorAll(".sort-btn[data-sort]"));
+  const seriesSortBtns = Array.from(document.querySelectorAll(".sort-btn[data-ssort]"));
+  const viewModeBtns = Array.from(document.querySelectorAll(".sort-btn[data-vmode]"));
+
+  const notesList = document.getElementById("notes-list");
+  const noteInput = document.getElementById("note-input");
+  const saveNoteBtn = document.getElementById("save-note-btn");
+
+  const modalOverlay = document.getElementById("modal-overlay");
+  const modalHeading = document.getElementById("modal-heading");
+  const modalSubdesc = document.getElementById("modal-subdesc");
+  const fSeriesUnlock = document.getElementById("f-series-unlock");
+  const fTitle = document.getElementById("f-title");
+  const fSeriesField = document.getElementById("f-series-field");
+  const fSeries = document.getElementById("f-series");
+  const fSeriesLockedField = document.getElementById("f-series-locked-field");
+  const fSeriesLocked = document.getElementById("f-series-locked");
+  const fYear = document.getElementById("f-year");
+  const fCredits = document.getElementById("f-credits");
+  const seriesOptions = document.getElementById("series-options");
+  const modalError = document.getElementById("modal-error");
+  const modalConfirm = document.getElementById("modal-confirm");
+  const modalCancel = document.getElementById("modal-cancel");
+
+  const confirmOverlay = document.getElementById("confirm-overlay");
+  const confirmTitle = document.getElementById("confirm-title");
+  const confirmDesc = document.getElementById("confirm-desc");
+  const confirmOk = document.getElementById("confirm-ok");
+  const confirmCancel = document.getElementById("confirm-cancel");
+
+  // ---------- view switching ----------
+  function showView(view) {
+    state.view = view;
+    viewHome.classList.toggle("hidden", view !== "home");
+    viewList.classList.toggle("hidden", view !== "list");
+    viewSeries.classList.toggle("hidden", view !== "series");
+    viewWork.classList.toggle("hidden", view !== "work");
+    topbar.classList.toggle("hidden", view === "home");
+    detailsPanel.classList.add("hidden");
+  }
+
+  async function goHome() {
+    state.category = null; state.seriesName = null; state.workId = null;
+    showView("home");
+  }
+
+  async function goList(category) {
+    state.category = category; state.seriesName = null; state.workId = null;
+    state.index = await loadIndex();
+    topbarTitle.textContent = CATEGORIES[category].labelEn;
+    topbarYear.textContent = "";
+    topbarSub.textContent = "";
+    topbarActions.innerHTML = "";
+    state.query = "";
+    searchInput.value = "";
+    // 表示モードボタンのラベルをカテゴリーに合わせる
+    const grouped = document.querySelector('.sort-btn[data-vmode="grouped"]');
+    if (grouped) grouped.textContent = CATEGORIES[category].groupLabel + "別";
+    showView("list");
+    renderCategoryList();
+    loadNoteCache(category); // 全文検索用（バックグラウンド）
+  }
+
+  async function loadNoteCache(category) {
+    const works = state.index[category] || [];
+    for (const w of works) {
+      if (!state.noteCache[w.id]) {
+        state.noteCache[w.id] = await loadNotes(w.id);
+      }
+    }
+    if (state.view === "list" && state.query) renderCategoryList();
+  }
+
+  async function goSeries(category, seriesName) {
+    state.category = category; state.seriesName = seriesName; state.workId = null;
+    state.index = await loadIndex();
+    topbarTitle.textContent = seriesName;
+    topbarYear.textContent = "";
+    topbarSub.textContent = CATEGORIES[category].labelEn + " ・" + CATEGORIES[category].groupLabel;
+    topbarActions.innerHTML = "";
+    showView("series");
+    renderSeriesList();
+  }
+
+  async function goWork(category, workId) {
+    state.index = state.index || await loadIndex();
+    const work = (state.index[category] || []).find(w => w.id === workId);
+    if (!work) { goList(category); return; }
+    state.category = category; state.workId = workId; state.seriesName = work.seriesName || null;
+
+    topbarTitle.textContent = work.title;
+    topbarYear.textContent = work.year ? "・" + work.year : "";
+    topbarSub.textContent = work.seriesName ? (CATEGORIES[category].labelEn + " ・" + work.seriesName) : CATEGORIES[category].labelEn;
+
+    topbarActions.innerHTML =
+      (work.credits ? '<button class="chip-btn" id="details-toggle">詳細</button>' : '') +
+      '<button class="chip-btn" id="edit-work-btn">編集</button>' +
+      '<button class="chip-btn danger" id="delete-work-btn">削除</button>';
+
+    if (work.credits) {
+      detailsPanelInner.textContent = work.credits;
+      document.getElementById("details-toggle").addEventListener("click", () => {
+        detailsPanel.classList.toggle("hidden");
+      });
+    }
+    document.getElementById("edit-work-btn").addEventListener("click", () => {
+      openEditModal(work);
+    });
+    document.getElementById("delete-work-btn").addEventListener("click", () => {
+      askDeleteWork(category, work);
+    });
+
+    showView("work");
+    state.notes = await loadNotes(workId);
+    state.noteCache[workId] = state.notes.slice();
+    renderNotes();
+    noteInput.value = "";
+    noteInput.focus();
+  }
+
+  backBtn.addEventListener("click", () => {
+    if (state.view === "work") {
+      if (state.seriesName) goSeries(state.category, state.seriesName);
+      else goList(state.category);
+    } else if (state.view === "series") {
+      goList(state.category);
+    } else if (state.view === "list") {
+      goHome();
+    }
+  });
+
+  document.querySelectorAll(".tile").forEach(tile => {
+    tile.addEventListener("click", () => goList(tile.getAttribute("data-cat")));
+  });
+
+  // ---------- search helpers ----------
+  function normalize(s) { return (s || "").toLowerCase(); }
+
+  function makeSnippet(text, q) {
+    const lower = normalize(text);
+    const at = lower.indexOf(normalize(q));
+    if (at < 0) return "";
+    const from = Math.max(0, at - 28);
+    const raw = (from > 0 ? "…" : "") + text.slice(from, at + q.length + 70) + "…";
+    return highlight(raw, q);
+  }
+
+  function highlight(text, q) {
+    const safe = escapeHtml(text);
+    if (!q) return safe;
+    const idx = normalize(safe).indexOf(normalize(q));
+    if (idx < 0) return safe;
+    return safe.slice(0, idx) + "<mark>" + safe.slice(idx, idx + q.length) + "</mark>" + safe.slice(idx + q.length);
+  }
+
+  function sortWorks(arr, mode) {
+    const m = mode || state.sortMode;
+    const a = arr.slice();
+    if (m === "title") {
+      a.sort((x, y) => (x.title || "").localeCompare(y.title || "", "ja"));
+    } else if (m === "year") {
+      a.sort((x, y) => {
+        const yx = parseInt(x.year, 10), yy = parseInt(y.year, 10);
+        if (isNaN(yx) && isNaN(yy)) return (x.title || "").localeCompare(y.title || "", "ja");
+        if (isNaN(yx)) return 1;   // 年が未入力のものは末尾へ
+        if (isNaN(yy)) return -1;
+        return yx - yy;
+      });
+    } else {
+      a.sort((x, y) => y.updatedAt - x.updatedAt);
+    }
+    return a;
+  }
+
+  function workRowHTML(w, q, snippet) {
+    return '<div class="entry-row">' +
+      '<button class="entry-main" data-work="' + w.id + '">' +
+        '<div class="entry-titlewrap"><div class="entry-title">' + highlight(w.title, q) +
+        (w.year ? '<span class="entry-year">' + escapeHtml(w.year) + '</span>' : '') + '</div>' +
+        (w.seriesName ? '<div class="entry-meta">' + escapeHtml(w.seriesName) + '</div>' : '') +
+        (snippet ? '<div class="snippet">' + snippet + '</div>' : '') +
+        '</div>' +
+        '<span class="entry-date">' + formatDate(w.updatedAt) + '</span>' +
+      '</button>' +
+      '<button class="entry-del" data-del-work="' + w.id + '" title="削除">×</button>' +
+    '</div>';
+  }
+
+  // ---------- category list (groups series + standalone) ----------
+  function renderCategoryList() {
+    const works = state.index[state.category] || [];
+    if (works.length === 0) {
+      listContainer.innerHTML = '<div class="list-empty"><span class="empty-code">' + CATEGORIES[state.category].code + '</span>まだ記録がありません。最初の作品を追加しましょう。</div>';
+      bindListEvents();
+      return;
+    }
+
+    const q = state.query.trim();
+
+    // --- search mode: flat list of matching works ---
+    if (q) {
+      const matches = [];
+      works.forEach(w => {
+        const inTitle = normalize(w.title).includes(normalize(q));
+        const inSeries = normalize(w.seriesName).includes(normalize(q));
+        const inCredits = normalize(w.credits).includes(normalize(q));
+        let snippet = "";
+        const notes = state.noteCache[w.id] || [];
+        for (const n of notes) {
+          if (normalize(n.content).includes(normalize(q))) { snippet = makeSnippet(n.content, q); break; }
+        }
+        if (inTitle || inSeries || inCredits || snippet) {
+          matches.push({ w: w, snippet: snippet });
+        }
+      });
+
+      if (matches.length === 0) {
+        listContainer.innerHTML = '<div class="list-empty">「' + escapeHtml(q) + '」に一致する記録はありません。</div>';
+        bindListEvents();
+        return;
+      }
+
+      const sorted = sortWorks(matches.map(m => m.w));
+      const snipOf = new Map(matches.map(m => [m.w.id, m.snippet]));
+      listContainer.innerHTML =
+        '<div class="result-head">' + sorted.length + '件の記録</div>' +
+        sorted.map(w => workRowHTML(w, q, snipOf.get(w.id))).join("");
+      bindListEvents();
+      return;
+    }
+
+    // --- flat mode: すべての作品を展開して並び替える ---
+    if (state.viewMode === "flat") {
+      listContainer.innerHTML =
+        '<div class="result-head">' + works.length + '件の記録</div>' +
+        sortWorks(works).map(w => workRowHTML(w, "", "")).join("");
+      bindListEvents();
+      return;
+    }
+
+    // --- normal mode: series folders (pinned on top) + standalone works ---
+    const seriesMap = new Map();
+    const standalone = [];
+    works.forEach(w => {
+      if (w.seriesName) {
+        if (!seriesMap.has(w.seriesName)) seriesMap.set(w.seriesName, []);
+        seriesMap.get(w.seriesName).push(w);
+      } else {
+        standalone.push(w);
+      }
+    });
+
+    // シリーズは並び替えの対象外。名前順で常に一覧の上部に固定する。
+    const seriesRows = [];
+    seriesMap.forEach((items, name) => {
+      seriesRows.push({
+        name: name,
+        count: items.length,
+        updatedAt: Math.max.apply(null, items.map(i => i.updatedAt))
+      });
+    });
+    seriesRows.sort((a, b) => a.name.localeCompare(b.name, "ja"));
+
+    const seriesHTML = seriesRows.map(r =>
+      '<div class="entry-row">' +
+        '<button class="entry-main" data-series="' + escapeHtml(r.name) + '">' +
+          '<div class="entry-titlewrap"><div class="entry-title">' + escapeHtml(r.name) +
+            '<span class="series-tag">' + CATEGORIES[state.category].groupTag + '</span></div>' +
+          '<div class="entry-meta">' + r.count + '件</div></div>' +
+          '<span class="entry-date">' + formatDate(r.updatedAt) + '</span>' +
+        '</button></div>'
+    ).join("");
+
+    const standaloneHTML = sortWorks(standalone).map(w => workRowHTML(w, "", "")).join("");
+
+    listContainer.innerHTML = seriesHTML + standaloneHTML;
+
+    bindListEvents();
+  }
+
+  function bindListEvents() {
+    listContainer.querySelectorAll("[data-series]").forEach(btn => {
+      btn.addEventListener("click", () => goSeries(state.category, btn.getAttribute("data-series")));
+    });
+    listContainer.querySelectorAll("[data-work]").forEach(btn => {
+      btn.addEventListener("click", () => goWork(state.category, btn.getAttribute("data-work")));
+    });
+    listContainer.querySelectorAll("[data-del-work]").forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const id = btn.getAttribute("data-del-work");
+        const w = (state.index[state.category] || []).find(x => x.id === id);
+        if (w) askDeleteWork(state.category, w);
+      });
+    });
+  }
+
+  // ---------- search / sort events ----------
+  searchInput.addEventListener("input", () => {
+    state.query = searchInput.value;
+    renderCategoryList();
+  });
+  viewModeBtns.forEach(btn => {
+    btn.addEventListener("click", () => {
+      state.viewMode = btn.getAttribute("data-vmode");
+      viewModeBtns.forEach(b => b.classList.toggle("is-active", b === btn));
+      renderCategoryList();
+    });
+  });
+
+  sortBtns.forEach(btn => {
+    btn.addEventListener("click", () => {
+      state.sortMode = btn.getAttribute("data-sort");
+      sortBtns.forEach(b => b.classList.toggle("is-active", b === btn));
+      renderCategoryList();
+    });
+  });
+
+  // ---------- series list ----------
+  function renderSeriesList() {
+    const works = (state.index[state.category] || []).filter(w => w.seriesName === state.seriesName);
+    if (works.length === 0) { goList(state.category); return; }
+    const sorted = sortWorks(works, state.seriesSortMode);
+
+    seriesContainer.innerHTML = sorted.map(w =>
+      '<div class="entry-row">' +
+        '<button class="entry-main" data-work="' + w.id + '">' +
+          '<div class="entry-titlewrap"><div class="entry-title">' + escapeHtml(w.title) +
+          (w.year ? '<span class="entry-year">' + escapeHtml(w.year) + '</span>' : '') + '</div></div>' +
+          '<span class="entry-date">' + formatDate(w.updatedAt) + '</span>' +
+        '</button>' +
+        '<button class="entry-del" data-del-work="' + w.id + '" title="削除">×</button>' +
+      '</div>'
+    ).join("");
+
+    seriesContainer.querySelectorAll("[data-work]").forEach(btn => {
+      btn.addEventListener("click", () => goWork(state.category, btn.getAttribute("data-work")));
+    });
+    seriesContainer.querySelectorAll("[data-del-work]").forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const id = btn.getAttribute("data-del-work");
+        const w = (state.index[state.category] || []).find(x => x.id === id);
+        if (w) askDeleteWork(state.category, w);
+      });
+    });
+  }
+
+  seriesSortBtns.forEach(btn => {
+    btn.addEventListener("click", () => {
+      state.seriesSortMode = btn.getAttribute("data-ssort");
+      seriesSortBtns.forEach(b => b.classList.toggle("is-active", b === btn));
+      renderSeriesList();
+    });
+  });
+
+  newWorkBtn.addEventListener("click", () => openCreateModal(null));
+  newWorkInSeriesBtn.addEventListener("click", () => openCreateModal(state.seriesName));
+
+  // ---------- create / edit modal ----------
+  function fillSeriesOptions() {
+    const cat = CATEGORIES[state.category];
+    // ラベルとプレースホルダーをカテゴリーに合わせる
+    document.querySelector('#f-series-field label').textContent = cat.groupLabel + "（任意）";
+    fSeries.placeholder = cat.groupPlaceholder;
+    document.querySelector('#f-series-locked-field label').textContent = cat.groupLabel;
+    fSeriesUnlock.textContent = cat.groupLabel + "を変更する";
+    const names = Array.from(new Set((state.index[state.category] || []).map(w => w.seriesName).filter(Boolean)));
+    seriesOptions.innerHTML = names.map(n => '<option value="' + escapeHtml(n) + '"></option>').join("");
+  }
+
+  function openCreateModal(lockedSeries) {
+    state.editingId = null;
+    modalHeading.textContent = "新規作成";
+    modalSubdesc.textContent = "タイトルを入力してください。" + CATEGORIES[state.category].groupLabel + "や詳細は後からでも追加できます。";
+    modalConfirm.textContent = "作成";
+
+    fTitle.value = ""; fSeries.value = ""; fYear.value = ""; fCredits.value = "";
+    modalError.textContent = "";
+    fillSeriesOptions();
+
+    if (lockedSeries) {
+      fSeriesField.classList.add("hidden");
+      fSeriesLockedField.classList.remove("hidden");
+      fSeriesLocked.textContent = lockedSeries;
+    } else {
+      fSeriesField.classList.remove("hidden");
+      fSeriesLockedField.classList.add("hidden");
+    }
+
+    modalOverlay.classList.remove("hidden");
+    setTimeout(() => fTitle.focus(), 30);
+  }
+
+  function openEditModal(work) {
+    state.editingId = work.id;
+    modalHeading.textContent = "編集";
+    modalSubdesc.textContent = "シリーズ名を入れると、同じ名前の作品が自動でまとまります。";
+    modalConfirm.textContent = "保存";
+
+    fTitle.value = work.title || "";
+    fSeries.value = work.seriesName || "";
+    fYear.value = work.year || "";
+    fCredits.value = work.credits || "";
+    modalError.textContent = "";
+    fillSeriesOptions();
+
+    // 編集時はシリーズ欄を常に開いた状態にする
+    fSeriesField.classList.remove("hidden");
+    fSeriesLockedField.classList.add("hidden");
+
+    modalOverlay.classList.remove("hidden");
+    setTimeout(() => fTitle.focus(), 30);
+  }
+
+  fSeriesUnlock.addEventListener("click", () => {
+    fSeries.value = fSeriesLocked.textContent.trim();
+    fSeriesLockedField.classList.add("hidden");
+    fSeriesField.classList.remove("hidden");
+    fSeries.focus();
+  });
+
+  function closeCreateModal() { modalOverlay.classList.add("hidden"); state.editingId = null; }
+  modalCancel.addEventListener("click", closeCreateModal);
+  modalOverlay.addEventListener("click", (e) => { if (e.target === modalOverlay) closeCreateModal(); });
+  modalConfirm.addEventListener("click", confirmCreate);
+
+  async function confirmCreate() {
+    const title = fTitle.value.trim();
+    if (!title) { modalError.textContent = "タイトルを入力してください。"; return; }
+
+    const seriesName = fSeriesLockedField.classList.contains("hidden")
+      ? fSeries.value.trim()
+      : fSeriesLocked.textContent.trim();
+
+    // --- 編集モード ---
+    if (state.editingId) {
+      const list = state.index[state.category] || [];
+      const work = list.find(w => w.id === state.editingId);
+      if (work) {
+        work.title = title;
+        work.year = fYear.value.trim();
+        work.seriesName = seriesName || null;
+        work.credits = fCredits.value.trim();
+        work.updatedAt = Date.now();
+        await saveIndex(state.index);
+      }
+      const editedId = state.editingId;
+      closeCreateModal();
+      goWork(state.category, editedId);
+      return;
+    }
+
+    // --- 新規作成モード ---
+    const id = genId(state.category);
+    const now = Date.now();
+    const work = {
+      id: id,
+      title: title,
+      year: fYear.value.trim(),
+      seriesName: seriesName || null,
+      credits: fCredits.value.trim(),
+      updatedAt: now,
+      createdAt: now
+    };
+
+    state.index[state.category] = state.index[state.category] || [];
+    state.index[state.category].push(work);
+    await saveIndex(state.index);
+    await saveNotes(id, []);
+
+    closeCreateModal();
+    goWork(state.category, id);
+  }
+
+  // ---------- delete work ----------
+  function askDeleteWork(category, work) {
+    state.pendingDelete = { kind: "work", category: category, workId: work.id, seriesName: work.seriesName };
+    confirmTitle.textContent = "「" + work.title + "」を削除しますか？";
+    confirmDesc.textContent = "この作品とすべてのメモが削除されます。元に戻せません。";
+    confirmOverlay.classList.remove("hidden");
+  }
+  function askDeleteNote(noteId) {
+    state.pendingDelete = { kind: "note", noteId: noteId };
+    confirmTitle.textContent = "このメモを削除しますか？";
+    confirmDesc.textContent = "この操作は元に戻せません。";
+    confirmOverlay.classList.remove("hidden");
+  }
+  confirmCancel.addEventListener("click", () => { state.pendingDelete = null; confirmOverlay.classList.add("hidden"); });
+  confirmOverlay.addEventListener("click", (e) => { if (e.target === confirmOverlay) { state.pendingDelete = null; confirmOverlay.classList.add("hidden"); } });
+
+  confirmOk.addEventListener("click", async () => {
+    const pending = state.pendingDelete;
+    confirmOverlay.classList.add("hidden");
+    if (!pending) return;
+
+    if (pending.kind === "work") {
+      state.index[pending.category] = (state.index[pending.category] || []).filter(w => w.id !== pending.workId);
+      await saveIndex(state.index);
+      await deleteNotesKey(pending.workId);
+      delete state.noteCache[pending.workId];
+
+      if (state.view === "work" && state.workId === pending.workId) {
+        if (pending.seriesName) {
+          const remaining = (state.index[pending.category] || []).some(w => w.seriesName === pending.seriesName);
+          if (remaining) goSeries(pending.category, pending.seriesName);
+          else goList(pending.category);
+        } else {
+          goList(pending.category);
+        }
+      } else if (state.view === "series") {
+        renderSeriesList();
+      } else if (state.view === "list") {
+        renderCategoryList();
+      }
+    } else if (pending.kind === "note") {
+      state.notes = state.notes.filter(n => n.id !== pending.noteId);
+      await saveNotes(state.workId, state.notes);
+      state.noteCache[state.workId] = state.notes.slice();
+      renderNotes();
+    }
+    state.pendingDelete = null;
+  });
+
+  // ---------- notes ----------
+  function renderNoteContent(content) {
+    // marked.js が読み込めていればMarkdownとして描画、失敗時はプレーンテキスト表示にフォールバック
+    if (window.marked && typeof window.marked.parse === "function") {
+      try { return window.marked.parse(content || ""); }
+      catch (e) { /* fall through */ }
+    }
+    return escapeHtml(content).replace(/\n/g, "<br>");
+  }
+
+  function renderNotes() {
+    if (state.notes.length === 0) {
+      notesList.innerHTML = '<div class="notes-empty">まだメモがありません。<br>下の欄に感想を貼り付け・入力してみましょう。</div>';
+      return;
+    }
+    notesList.innerHTML = state.notes.map(n =>
+      '<div class="note-card">' +
+        '<button class="note-del" data-note-del="' + n.id + '" title="メモを削除">×</button>' +
+        '<div class="note-content markdown-body">' + renderNoteContent(n.content) + '</div>' +
+        '<div class="note-time">' + formatTime(n.ts) + '</div>' +
+      '</div>'
+    ).join("");
+    notesList.querySelectorAll("[data-note-del]").forEach(btn => {
+      btn.addEventListener("click", () => askDeleteNote(btn.getAttribute("data-note-del")));
+    });
+    notesList.scrollTop = notesList.scrollHeight;
+  }
+
+  async function updateWorkTimestamp() {
+    const list = state.index[state.category] || [];
+    const entry = list.find(w => w.id === state.workId);
+    if (entry) entry.updatedAt = Date.now();
+    await saveIndex(state.index);
+  }
+
+  async function handleSaveNote() {
+    const text = noteInput.value.trim();
+    if (!text) return;
+    noteInput.value = "";
+    state.notes.push({ id: genId("note"), content: text, ts: Date.now() });
+    renderNotes();
+    await saveNotes(state.workId, state.notes);
+    state.noteCache[state.workId] = state.notes.slice();
+    await updateWorkTimestamp();
+  }
+
+  saveNoteBtn.addEventListener("click", handleSaveNote);
+  noteInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSaveNote(); }
+  });
+
+  // ---------- init ----------
+  (async function init() {
+    state.index = await loadIndex();
+    showView("home");
+  })();
+})();
+</script>
+
+</body>
+</html>
