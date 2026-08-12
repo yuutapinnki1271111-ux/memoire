@@ -197,7 +197,7 @@
   .notes-empty { text-align: center; color: var(--muted); font-size: 12.5px; line-height: 2; padding: 40px 20px; font-family: var(--font-body); }
 
   .note-card { position: relative; background: var(--surface); border-radius: var(--radius-m); padding: 14px 16px; }
-  .note-content { font-size: 14.5px; line-height: 1.85; letter-spacing: 0.01em; white-space: pre-wrap; padding-right: 22px; }
+  .note-content { font-size: 14.5px; line-height: 1.85; letter-spacing: 0.01em; white-space: pre-wrap; padding-right: 44px; }
 
   /* ---------- Markdown rendering within notes ---------- */
   .note-content.markdown-body { white-space: normal; }
@@ -461,8 +461,11 @@
         <div class="composer-inner">
           <textarea id="note-input" class="genko-input" placeholder="感想や気づきを貼り付け・入力…（Markdown対応：# 見出し / **太字** / - 箇条書き）" rows="3"></textarea>
           <div class="composer-row">
-            <span class="composer-hint">Enterで保存 / Shift+Enterで改行 / Markdown対応</span>
-            <button class="send-btn" id="save-note-btn">保存</button>
+            <span class="composer-hint" id="composer-hint">Enterで保存 / Shift+Enterで改行 / Markdown対応</span>
+            <div style="display:flex; gap:8px;">
+              <button class="chip-btn hidden" id="cancel-edit-note-btn">キャンセル</button>
+              <button class="send-btn" id="save-note-btn">保存</button>
+            </div>
           </div>
         </div>
       </div>
@@ -590,7 +593,8 @@
     seriesSortMode: "year", // シリーズ内は年代順が既定
     viewMode: "grouped",    // 'grouped'(シリーズ別) | 'flat'(すべて展開)
     noteCache: {},       // workId -> notes[] (for full-text search)
-    editingId: null      // 編集中の作品ID
+    editingId: null,     // 編集中の作品ID
+    editingNoteId: null  // 編集中のメモID
   };
 
   // ---------- storage ----------
@@ -659,6 +663,8 @@
   const notesList = document.getElementById("notes-list");
   const noteInput = document.getElementById("note-input");
   const saveNoteBtn = document.getElementById("save-note-btn");
+  const cancelEditNoteBtn = document.getElementById("cancel-edit-note-btn");
+  const composerHint = document.getElementById("composer-hint");
 
   const modalOverlay = document.getElementById("modal-overlay");
   const modalHeading = document.getElementById("modal-heading");
@@ -768,7 +774,7 @@
     state.notes = await loadNotes(workId);
     state.noteCache[workId] = state.notes.slice();
     renderNotes();
-    noteInput.value = "";
+    cancelEditNote();
     noteInput.focus();
   }
 
@@ -1193,7 +1199,10 @@
     }
     notesList.innerHTML = state.notes.map(n =>
       '<div class="note-card">' +
-        '<button class="note-del" data-note-del="' + n.id + '" title="メモを削除">×</button>' +
+        '<div class="note-actions" style="position:absolute; top:10px; right:10px; display:flex; gap:10px;">' +
+          '<button class="note-edit" data-note-edit="' + n.id + '" title="メモを編集" style="background:none; border:none; color:var(--muted); font-size:13px; padding:0;">✎</button>' +
+          '<button class="note-del" data-note-del="' + n.id + '" title="メモを削除" style="position:static;">×</button>' +
+        '</div>' +
         '<div class="note-content markdown-body">' + renderNoteContent(n.content) + '</div>' +
         '<div class="note-time">' + formatTime(n.ts) + '</div>' +
       '</div>'
@@ -1201,8 +1210,32 @@
     notesList.querySelectorAll("[data-note-del]").forEach(btn => {
       btn.addEventListener("click", () => askDeleteNote(btn.getAttribute("data-note-del")));
     });
+    notesList.querySelectorAll("[data-note-edit]").forEach(btn => {
+      btn.addEventListener("click", () => startEditNote(btn.getAttribute("data-note-edit")));
+    });
     notesList.scrollTop = notesList.scrollHeight;
   }
+
+  function startEditNote(noteId) {
+    const note = state.notes.find(n => n.id === noteId);
+    if (!note) return;
+    state.editingNoteId = noteId;
+    noteInput.value = note.content;
+    noteInput.focus();
+    saveNoteBtn.textContent = "更新";
+    composerHint.textContent = "編集中… Enterで更新 / Shift+Enterで改行";
+    cancelEditNoteBtn.classList.remove("hidden");
+  }
+
+  function cancelEditNote() {
+    state.editingNoteId = null;
+    noteInput.value = "";
+    saveNoteBtn.textContent = "保存";
+    composerHint.textContent = "Enterで保存 / Shift+Enterで改行 / Markdown対応";
+    cancelEditNoteBtn.classList.add("hidden");
+  }
+
+  cancelEditNoteBtn.addEventListener("click", cancelEditNote);
 
   async function updateWorkTimestamp() {
     const list = state.index[state.category] || [];
@@ -1214,6 +1247,18 @@
   async function handleSaveNote() {
     const text = noteInput.value.trim();
     if (!text) return;
+
+    if (state.editingNoteId) {
+      const note = state.notes.find(n => n.id === state.editingNoteId);
+      if (note) note.content = text;
+      cancelEditNote();
+      renderNotes();
+      await saveNotes(state.workId, state.notes);
+      state.noteCache[state.workId] = state.notes.slice();
+      await updateWorkTimestamp();
+      return;
+    }
+
     noteInput.value = "";
     state.notes.push({ id: genId("note"), content: text, ts: Date.now() });
     renderNotes();
