@@ -526,20 +526,42 @@
 (function () {
   "use strict";
 
-  // localStorage adapter (replaces window.storage from the original runtime)
+  // Cloud storage adapter (Cloudflare Worker + KV) — syncs across devices
   if (!window.storage) {
+    var API_BASE = "https://memoire-api.yuutapinnki1271111.workers.dev/";
+
+    function getAuthToken() {
+      var t = localStorage.getItem("memoire-auth");
+      if (!t) {
+        t = window.prompt("合言葉を入力してください");
+        if (t) localStorage.setItem("memoire-auth", t);
+      }
+      return t;
+    }
+
     window.storage = {
       get: function(key) {
-        var v = localStorage.getItem(key);
-        return Promise.resolve(v !== null ? { value: v } : null);
+        return fetch(API_BASE + encodeURIComponent(key), {
+          headers: { "X-Auth": getAuthToken() || "" }
+        }).then(function(r) {
+          if (r.status === 401) { localStorage.removeItem("memoire-auth"); return null; }
+          return r.text();
+        }).then(function(text) {
+          return text ? { value: text } : null;
+        }).catch(function(e) { console.error("storage.get failed", e); return null; });
       },
       set: function(key, value) {
-        try { localStorage.setItem(key, value); } catch(e) { console.error(e); }
-        return Promise.resolve();
+        return fetch(API_BASE + encodeURIComponent(key), {
+          method: "PUT",
+          headers: { "X-Auth": getAuthToken() || "", "Content-Type": "application/json" },
+          body: value
+        }).catch(function(e) { console.error("storage.set failed", e); });
       },
       delete: function(key) {
-        localStorage.removeItem(key);
-        return Promise.resolve();
+        return fetch(API_BASE + encodeURIComponent(key), {
+          method: "DELETE",
+          headers: { "X-Auth": getAuthToken() || "" }
+        }).catch(function(e) { console.error("storage.delete failed", e); });
       }
     };
   }
