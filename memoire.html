@@ -176,12 +176,13 @@
   .entry-meta { font-family: var(--font-display); font-size: 10.5px; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; margin-top: 3px; }
   .entry-date { font-family: var(--font-display); font-size: 11px; color: var(--muted); white-space: nowrap; letter-spacing: 0.04em; flex-shrink: 0; }
 
-  .entry-del {
+  .entry-more, .entry-del {
     flex-shrink: 0; width: 26px; height: 26px; border: 1px solid var(--border); background: var(--bg);
     color: var(--muted); border-radius: 50%; font-size: 13px; line-height: 1;
     display: flex; align-items: center; justify-content: center;
     transition: border-color 0.15s ease, color 0.15s ease;
   }
+  .entry-more:hover { border-color: var(--ink); color: var(--ink); }
   .entry-del:hover { border-color: #b8362a; color: #b8362a; }
 
   .list-empty { text-align: center; padding: 60px 10px 20px; color: var(--muted); font-size: 12.5px; line-height: 1.9; }
@@ -286,11 +287,6 @@
     text-transform: uppercase; color: var(--muted);
   }
   .work-edit-header-actions { display: flex; gap: 10px; }
-  .work-edit-fields {
-    flex-shrink: 0; padding: 16px 22px 4px; border-bottom: 1px solid var(--border);
-    max-width: 720px; width: 100%; margin: 0 auto;
-  }
-  .work-edit-fields .field { margin-bottom: 12px; }
   .work-edit-body {
     flex: 1; width: 100%; border: none; resize: none; padding: 24px;
     font-family: var(--font-body); font-size: 15.5px; line-height: 1.9;
@@ -508,34 +504,14 @@
   </div>
 </div>
 
-<!-- Full-screen unified editor: title/series/year/details + body, all on one page -->
+<!-- Full-screen body editor (title/series/year/details are edited separately via the ⋯ button on list rows) -->
 <div class="work-edit-overlay hidden" id="work-edit-overlay">
   <div class="work-edit-header">
-    <span class="work-edit-title">編集</span>
+    <span class="work-edit-title">本文を編集</span>
     <div class="work-edit-header-actions">
       <button class="btn btn-ghost" id="work-edit-cancel">キャンセル</button>
       <button class="btn btn-primary" id="work-edit-save">保存</button>
     </div>
-  </div>
-  <div class="work-edit-fields">
-    <div class="field">
-      <label for="we-title">タイトル</label>
-      <input id="we-title" type="text" maxlength="80" />
-    </div>
-    <div class="field" id="we-series-field">
-      <label for="we-series">シリーズ（任意）</label>
-      <input id="we-series" type="text" maxlength="60" list="we-series-options" />
-      <datalist id="we-series-options"></datalist>
-    </div>
-    <div class="field">
-      <label for="we-year">年（任意）</label>
-      <input id="we-year" type="text" maxlength="20" />
-    </div>
-    <div class="field">
-      <label for="we-credits">詳細（任意）— 監督・キャスト・制作会社など</label>
-      <textarea id="we-credits" maxlength="600" rows="2"></textarea>
-    </div>
-    <div class="modal-error" id="work-edit-error"></div>
   </div>
   <textarea class="work-edit-body" id="work-edit-body" placeholder="本文（Markdown対応：# 見出し / **太字** / - 箇条書き）"></textarea>
 </div>
@@ -664,13 +640,6 @@
   const workEditOverlay = document.getElementById("work-edit-overlay");
   const workEditSaveBtn = document.getElementById("work-edit-save");
   const workEditCancelBtn = document.getElementById("work-edit-cancel");
-  const weTitle = document.getElementById("we-title");
-  const weSeriesField = document.getElementById("we-series-field");
-  const weSeries = document.getElementById("we-series");
-  const weSeriesOptions = document.getElementById("we-series-options");
-  const weYear = document.getElementById("we-year");
-  const weCredits = document.getElementById("we-credits");
-  const weError = document.getElementById("work-edit-error");
   const workEditBody = document.getElementById("work-edit-body");
 
   const modalOverlay = document.getElementById("modal-overlay");
@@ -848,6 +817,7 @@
         '</div>' +
         '<span class="entry-date">' + formatDate(w.updatedAt) + '</span>' +
       '</button>' +
+      '<button class="entry-more" data-more-work="' + w.id + '" title="タイトル・シリーズ等を編集">⋯</button>' +
       '<button class="entry-del" data-del-work="' + w.id + '" title="削除">×</button>' +
     '</div>';
   }
@@ -951,6 +921,14 @@
     listContainer.querySelectorAll("[data-work]").forEach(btn => {
       btn.addEventListener("click", () => goWork(state.category, btn.getAttribute("data-work")));
     });
+    listContainer.querySelectorAll("[data-more-work]").forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const id = btn.getAttribute("data-more-work");
+        const w = (state.index[state.category] || []).find(x => x.id === id);
+        if (w) openMetaEditModal(w);
+      });
+    });
     listContainer.querySelectorAll("[data-del-work]").forEach(btn => {
       btn.addEventListener("click", (e) => {
         e.stopPropagation();
@@ -995,12 +973,21 @@
           (w.year ? '<span class="entry-year">' + escapeHtml(w.year) + '</span>' : '') + '</div></div>' +
           '<span class="entry-date">' + formatDate(w.updatedAt) + '</span>' +
         '</button>' +
+        '<button class="entry-more" data-more-work="' + w.id + '" title="タイトル・シリーズ等を編集">⋯</button>' +
         '<button class="entry-del" data-del-work="' + w.id + '" title="削除">×</button>' +
       '</div>'
     ).join("");
 
     seriesContainer.querySelectorAll("[data-work]").forEach(btn => {
       btn.addEventListener("click", () => goWork(state.category, btn.getAttribute("data-work")));
+    });
+    seriesContainer.querySelectorAll("[data-more-work]").forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const id = btn.getAttribute("data-more-work");
+        const w = (state.index[state.category] || []).find(x => x.id === id);
+        if (w) openMetaEditModal(w);
+      });
     });
     seriesContainer.querySelectorAll("[data-del-work]").forEach(btn => {
       btn.addEventListener("click", (e) => {
@@ -1058,6 +1045,26 @@
     setTimeout(() => fTitle.focus(), 30);
   }
 
+  function openMetaEditModal(work) {
+    state.editingId = work.id;
+    modalHeading.textContent = "編集";
+    modalSubdesc.textContent = "シリーズ名を入れると、同じ名前の作品が自動でまとまります。";
+    modalConfirm.textContent = "保存";
+
+    fTitle.value = work.title || "";
+    fSeries.value = work.seriesName || "";
+    fYear.value = work.year || "";
+    fCredits.value = work.credits || "";
+    modalError.textContent = "";
+    fillSeriesOptions();
+
+    fSeriesField.classList.remove("hidden");
+    fSeriesLockedField.classList.add("hidden");
+
+    modalOverlay.classList.remove("hidden");
+    setTimeout(() => fTitle.focus(), 30);
+  }
+
   fSeriesUnlock.addEventListener("click", () => {
     fSeries.value = fSeriesLocked.textContent.trim();
     fSeriesLockedField.classList.add("hidden");
@@ -1065,10 +1072,21 @@
     fSeries.focus();
   });
 
-  function closeCreateModal() { modalOverlay.classList.add("hidden"); state.editingId = null; }
+  function closeCreateModal() {
+    modalOverlay.classList.add("hidden");
+    state.editingId = null;
+    modalHeading.textContent = "新規作成";
+    modalConfirm.textContent = "作成";
+  }
   modalCancel.addEventListener("click", closeCreateModal);
   modalOverlay.addEventListener("click", (e) => { if (e.target === modalOverlay) closeCreateModal(); });
   modalConfirm.addEventListener("click", confirmCreate);
+
+  function refreshCurrentView() {
+    if (state.view === "work") goWork(state.category, state.workId);
+    else if (state.view === "series") renderSeriesList();
+    else if (state.view === "list") renderCategoryList();
+  }
 
   async function confirmCreate() {
     const title = fTitle.value.trim();
@@ -1078,6 +1096,24 @@
       ? fSeries.value.trim()
       : fSeriesLocked.textContent.trim();
 
+    // --- 編集モード（タイトル・シリーズ・年・詳細のみ） ---
+    if (state.editingId) {
+      const list = state.index[state.category] || [];
+      const work = list.find(w => w.id === state.editingId);
+      if (work) {
+        work.title = title;
+        work.year = fYear.value.trim();
+        work.seriesName = seriesName || null;
+        work.credits = fCredits.value.trim();
+        work.updatedAt = Date.now();
+        await saveIndex(state.index);
+      }
+      closeCreateModal();
+      refreshCurrentView();
+      return;
+    }
+
+    // --- 新規作成モード ---
     const id = genId(state.category);
     const now = Date.now();
     const work = {
@@ -1167,25 +1203,11 @@
     await saveIndex(state.index);
   }
 
-  // ---------- unified editor: title/series/year/details + body, one page ----------
-  function fillWorkEditSeriesOptions() {
-    const cat = CATEGORIES[state.category];
-    document.querySelector('#we-series-field label').textContent = cat.groupLabel + "（任意）";
-    weSeries.placeholder = cat.groupPlaceholder;
-    const names = Array.from(new Set((state.index[state.category] || []).map(w => w.seriesName).filter(Boolean)));
-    weSeriesOptions.innerHTML = names.map(n => '<option value="' + escapeHtml(n) + '"></option>').join("");
-  }
-
+  // ---------- full-screen body editor (title/series/year/details are edited via the ⋯ modal instead) ----------
   function openWorkEditor(work) {
-    weTitle.value = work.title || "";
-    weSeries.value = work.seriesName || "";
-    weYear.value = work.year || "";
-    weCredits.value = work.credits || "";
-    weError.textContent = "";
-    fillWorkEditSeriesOptions();
     workEditBody.value = (state.notes[0] && state.notes[0].content) || "";
     workEditOverlay.classList.remove("hidden");
-    setTimeout(() => weTitle.focus(), 30);
+    setTimeout(() => workEditBody.focus(), 30);
   }
 
   function closeWorkEditor() {
@@ -1193,20 +1215,6 @@
   }
 
   async function saveWorkEditor() {
-    const title = weTitle.value.trim();
-    if (!title) { weError.textContent = "タイトルを入力してください。"; return; }
-
-    const list = state.index[state.category] || [];
-    const work = list.find(w => w.id === state.workId);
-    if (!work) { closeWorkEditor(); return; }
-
-    work.title = title;
-    work.year = weYear.value.trim();
-    work.seriesName = weSeries.value.trim() || null;
-    work.credits = weCredits.value.trim();
-    work.updatedAt = Date.now();
-    await saveIndex(state.index);
-
     const bodyText = workEditBody.value.trim();
     if (bodyText) {
       if (state.notes[0]) state.notes[0].content = bodyText;
@@ -1216,6 +1224,7 @@
     }
     await saveNotes(state.workId, state.notes);
     state.noteCache[state.workId] = state.notes.slice();
+    await updateWorkTimestamp();
 
     closeWorkEditor();
     goWork(state.category, state.workId);
