@@ -560,42 +560,27 @@
 (function () {
   "use strict";
 
-  // Cloud storage adapter (Cloudflare Worker + KV) — syncs across devices
+  // Cloud storage adapter (Cloudflare Worker + KV) — syncs across devices, no auth
   if (!window.storage) {
     var API_BASE = "https://memoire-api.yuutapinnki1271111.workers.dev/";
 
-    function getAuthToken() {
-      var t = localStorage.getItem("memoire-auth");
-      if (!t) {
-        t = window.prompt("合言葉を入力してください");
-        if (t) localStorage.setItem("memoire-auth", t);
-      }
-      return t;
-    }
-
     window.storage = {
       get: function(key) {
-        return fetch(API_BASE + encodeURIComponent(key), {
-          headers: { "X-Auth": getAuthToken() || "" }
-        }).then(function(r) {
-          if (r.status === 401) { localStorage.removeItem("memoire-auth"); return null; }
-          return r.text();
-        }).then(function(text) {
-          return text ? { value: text } : null;
-        }).catch(function(e) { console.error("storage.get failed", e); return null; });
+        return fetch(API_BASE + encodeURIComponent(key))
+          .then(function(r) { return r.text(); })
+          .then(function(text) { return text ? { value: text } : null; })
+          .catch(function(e) { console.error("storage.get failed", e); return null; });
       },
       set: function(key, value) {
         return fetch(API_BASE + encodeURIComponent(key), {
           method: "PUT",
-          headers: { "X-Auth": getAuthToken() || "", "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json" },
           body: value
         }).catch(function(e) { console.error("storage.set failed", e); });
       },
       delete: function(key) {
-        return fetch(API_BASE + encodeURIComponent(key), {
-          method: "DELETE",
-          headers: { "X-Auth": getAuthToken() || "" }
-        }).catch(function(e) { console.error("storage.delete failed", e); });
+        return fetch(API_BASE + encodeURIComponent(key), { method: "DELETE" })
+          .catch(function(e) { console.error("storage.delete failed", e); });
       }
     };
   }
