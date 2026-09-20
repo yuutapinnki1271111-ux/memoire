@@ -293,8 +293,77 @@
     letter-spacing: 0.01em; color: var(--ink); background: var(--bg);
   }
   .work-edit-body:focus { outline: none; }
+  .work-edit-body.is-drop { background: var(--surface); outline: 2px dashed var(--border-strong); outline-offset: -10px; }
+
+  .work-edit-tools {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    padding: 10px 22px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+  }
+  .tool-btn {
+    background: none; border: 1px solid var(--border); color: var(--muted);
+    border-radius: 20px; padding: 6px 13px; font-family: var(--font-display);
+    font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
+    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+  }
+  .tool-btn:hover { border-color: var(--ink); color: var(--ink); }
+  .tool-btn.is-active { background: var(--ink); border-color: var(--ink); color: #fff; }
+  .tool-btn[disabled] { opacity: 0.4; cursor: default; }
+  .tool-btn[disabled]:hover { border-color: var(--border); color: var(--muted); }
+  .work-edit-status {
+    font-family: var(--font-body); font-size: 11.5px; color: var(--muted);
+    line-height: 1.5; margin-left: 2px;
+  }
+  .work-edit-preview {
+    flex: 1; overflow-y: auto; padding: 24px; width: 100%;
+    max-width: 720px; margin: 0 auto; font-size: 14.5px; line-height: 1.85;
+  }
+  .work-edit-preview-empty { color: var(--muted); font-size: 12.5px; }
+
+  /* ---------- Images inside notes ---------- */
+  .note-figure { display: block; margin: 0 0 1em; }
+  .note-img {
+    display: block; max-width: 100%; height: auto; border: 1px solid var(--border);
+    border-radius: var(--radius-s); background: var(--surface-alt); cursor: zoom-in;
+  }
+  .note-img-cap {
+    display: block; font-family: var(--font-display); font-size: 10.5px; color: var(--muted);
+    letter-spacing: 0.06em; line-height: 1.7; margin-top: 6px;
+  }
+  .note-img-ph {
+    display: block; height: 140px; border: 1px dashed var(--border);
+    border-radius: var(--radius-s); background: var(--surface-alt);
+    animation: phPulse 1.4s ease-in-out infinite;
+  }
+  .note-img-ph.is-error {
+    animation: none; background: none; border-color: #d9b2ac; color: #b8362a;
+    font-size: 11.5px; line-height: 140px; text-align: center;
+  }
+  @keyframes phPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+
+  /* ---------- Lightbox (click an image to see it full size) ---------- */
+  .lightbox {
+    position: fixed; inset: 0; z-index: 90; background: rgba(17,17,17,0.93);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 14px; padding: 30px; cursor: zoom-out;
+  }
+  .lightbox img {
+    max-width: 100%; max-height: 100%; object-fit: contain;
+    border-radius: var(--radius-s); cursor: default;
+  }
+  .lightbox-cap {
+    font-family: var(--font-display); font-size: 11.5px; color: #cfcfcf;
+    letter-spacing: 0.06em; text-align: center; max-width: 640px;
+  }
+  .lightbox-close {
+    position: absolute; top: 14px; right: 18px; width: 34px; height: 34px;
+    background: none; border: 1px solid rgba(255,255,255,0.45); color: #fff;
+    border-radius: 50%; font-size: 17px; line-height: 1;
+  }
+  .lightbox-close:hover { border-color: #fff; }
 
   @media (max-width: 560px) {
+    .work-edit-tools { padding: 10px 16px; }
+    .work-edit-preview { padding: 18px 16px; }
     .tiles { grid-template-columns: repeat(2, minmax(110px, 1fr)); }
   }
   @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
@@ -513,7 +582,21 @@
       <button class="btn btn-primary" id="work-edit-save">保存</button>
     </div>
   </div>
-  <textarea class="work-edit-body" id="work-edit-body" placeholder="本文（Markdown対応：# 見出し / **太字** / - 箇条書き）"></textarea>
+  <div class="work-edit-tools">
+    <button class="tool-btn" id="work-edit-img-btn">＋ 画像</button>
+    <button class="tool-btn" id="work-edit-preview-btn">プレビュー</button>
+    <span class="work-edit-status" id="work-edit-status">画像はドラッグ＆ドロップや Ctrl+V でも貼れます</span>
+  </div>
+  <textarea class="work-edit-body" id="work-edit-body" placeholder="本文（Markdown対応：# 見出し / **太字** / - 箇条書き / 画像）"></textarea>
+  <div class="work-edit-preview markdown-body hidden" id="work-edit-preview"></div>
+  <input type="file" id="work-edit-file" accept="image/*" multiple hidden />
+</div>
+
+<!-- Lightbox: full-size view of a note image -->
+<div class="lightbox hidden" id="lightbox">
+  <button class="lightbox-close" id="lightbox-close" aria-label="閉じる">×</button>
+  <img id="lightbox-img" alt="" />
+  <div class="lightbox-cap" id="lightbox-cap"></div>
 </div>
 
 <script>
@@ -594,6 +677,59 @@
     try { await window.storage.delete("notes:" + workId); } catch (e) { /* ignore */ }
   }
 
+  // ---------- images ----------
+  // 画像は本文とは別のキーに1枚ずつ保存し、本文には ![説明](memoire:<id>) という短い参照だけを置く。
+  // こうすると本文が軽いままなので、検索も編集も今までどおりの速さで動く。
+  const IMG_REF = "memoire:";
+  const IMG_MAX_EDGE = 1600;            // 長辺をこのpxまで縮める
+  const IMG_KEEP_AS_IS = 300 * 1024;    // これ以下のPNG/GIF/WebPは再圧縮せずそのまま保存
+  const imgCache = {};                  // imgId -> data URI
+  const imgLoading = {};                // imgId -> 読み込み中のPromise
+
+  async function loadImageData(imgId) {
+    if (imgCache[imgId]) return imgCache[imgId];
+    if (imgLoading[imgId]) return imgLoading[imgId];
+    imgLoading[imgId] = (async () => {
+      try {
+        const res = await window.storage.get("img:" + imgId);
+        const uri = res && typeof res.value === "string" && res.value.indexOf("data:") === 0 ? res.value : null;
+        if (uri) imgCache[imgId] = uri;
+        return uri;
+      } catch (e) {
+        return null;
+      } finally {
+        delete imgLoading[imgId];
+      }
+    })();
+    return imgLoading[imgId];
+  }
+
+  async function saveImageData(imgId, dataUri) {
+    imgCache[imgId] = dataUri;
+    await window.storage.set("img:" + imgId, dataUri);
+  }
+
+  async function deleteImageData(imgId) {
+    delete imgCache[imgId];
+    try { await window.storage.delete("img:" + imgId); } catch (e) { /* ignore */ }
+  }
+
+  // 本文から画像参照のidを拾う
+  function collectImgIds(text) {
+    const ids = [];
+    const re = /!\[[^\]]*\]\(\s*memoire:([A-Za-z0-9_-]+)\s*\)/g;
+    let m;
+    while ((m = re.exec(text || ""))) {
+      if (ids.indexOf(m[1]) < 0) ids.push(m[1]);
+    }
+    return ids;
+  }
+
+  // 検索やスニペット用に、画像参照を取り除いた素の文章を返す
+  function stripImgRefs(text) {
+    return (text || "").replace(/!\[[^\]]*\]\(\s*memoire:[^)]*\)/g, " ");
+  }
+
   // ---------- utils ----------
   function escapeHtml(str) {
     const div = document.createElement("div");
@@ -641,6 +777,18 @@
   const workEditSaveBtn = document.getElementById("work-edit-save");
   const workEditCancelBtn = document.getElementById("work-edit-cancel");
   const workEditBody = document.getElementById("work-edit-body");
+  const workEditTools = {
+    imgBtn: document.getElementById("work-edit-img-btn"),
+    previewBtn: document.getElementById("work-edit-preview-btn"),
+    status: document.getElementById("work-edit-status"),
+    preview: document.getElementById("work-edit-preview"),
+    file: document.getElementById("work-edit-file")
+  };
+
+  const lightbox = document.getElementById("lightbox");
+  const lightboxImg = document.getElementById("lightbox-img");
+  const lightboxCap = document.getElementById("lightbox-cap");
+  const lightboxClose = document.getElementById("lightbox-close");
 
   const modalOverlay = document.getElementById("modal-overlay");
   const modalHeading = document.getElementById("modal-heading");
@@ -843,7 +991,9 @@
         let snippet = "";
         const notes = state.noteCache[w.id] || [];
         for (const n of notes) {
-          if (normalize(n.content).includes(normalize(q))) { snippet = makeSnippet(n.content, q); break; }
+          // 画像参照（![](memoire:…)）は読み物ではないので、検索対象から外す
+          const text = stripImgRefs(n.content);
+          if (normalize(text).includes(normalize(q))) { snippet = makeSnippet(text, q); break; }
         }
         if (inTitle || inSeries || inCredits || snippet) {
           matches.push({ w: w, snippet: snippet });
@@ -1151,6 +1301,10 @@
     if (!pending) return;
 
     if (pending.kind === "work") {
+      // 本文を消す前に、その本文が使っていた画像も保管庫から片付ける
+      const doomed = state.noteCache[pending.workId] || await loadNotes(pending.workId);
+      doomed.forEach(n => collectImgIds(n.content).forEach(deleteImageData));
+
       state.index[pending.category] = (state.index[pending.category] || []).filter(w => w.id !== pending.workId);
       await saveIndex(state.index);
       await deleteNotesKey(pending.workId);
@@ -1174,6 +1328,31 @@
   });
 
   // ---------- notes ----------
+  // 画像は marked に描かせず、まず「空の枠」を出しておく。
+  // 枠を画面に置いたあとで実データを取りに行き、届いた順に差し込む（hydrateImages）。
+  // こうすると重い画像を待たずに本文がすぐ読める。
+  // <figure> は <p> の中に置けないので、見た目だけ block にした <span> を使っている。
+  function setupMarked() {
+    if (!window.marked || typeof window.marked.use !== "function") return;
+    window.marked.use({
+      renderer: {
+        image(href, title, text) {
+          const alt = text || "";
+          const cap = alt ? '<span class="note-img-cap">' + escapeHtml(alt) + '</span>' : '';
+          if (href && href.indexOf(IMG_REF) === 0) {
+            return '<span class="note-figure" data-mid="' + escapeHtml(href.slice(IMG_REF.length)) + '">' +
+                     '<span class="note-img-ph"></span>' + cap +
+                   '</span>';
+          }
+          return '<span class="note-figure">' +
+                   '<img class="note-img" src="' + escapeHtml(href || "") + '" alt="' + escapeHtml(alt) + '"' +
+                   (title ? ' title="' + escapeHtml(title) + '"' : '') + ' />' + cap +
+                 '</span>';
+        }
+      }
+    });
+  }
+
   function renderNoteContent(content) {
     // marked.js が読み込めていればMarkdownとして描画、失敗時はプレーンテキスト表示にフォールバック
     if (window.marked && typeof window.marked.parse === "function") {
@@ -1181,6 +1360,37 @@
       catch (e) { /* fall through */ }
     }
     return escapeHtml(content).replace(/\n/g, "<br>");
+  }
+
+  function hydrateImages(root) {
+    root.querySelectorAll(".note-figure[data-mid]").forEach(fig => {
+      const ph = fig.querySelector(".note-img-ph");
+      if (!ph) return;
+      const mid = fig.getAttribute("data-mid");
+      const capEl = fig.querySelector(".note-img-cap");
+      const alt = capEl ? capEl.textContent : "";
+      loadImageData(mid).then(uri => {
+        if (!fig.isConnected || !ph.isConnected) return;
+        if (!uri) {
+          ph.classList.add("is-error");
+          ph.textContent = "画像を読み込めませんでした";
+          return;
+        }
+        const img = document.createElement("img");
+        img.className = "note-img";
+        img.alt = alt;
+        img.loading = "lazy";
+        img.src = uri;
+        img.addEventListener("click", () => openLightbox(uri, alt));
+        ph.replaceWith(img);
+      });
+    });
+
+    // 外部URLの画像も同じようにクリックで拡大できるようにする
+    root.querySelectorAll("img.note-img:not([data-zoom])").forEach(img => {
+      img.setAttribute("data-zoom", "1");
+      img.addEventListener("click", () => openLightbox(img.src, img.alt));
+    });
   }
 
   function renderNotes() {
@@ -1194,7 +1404,26 @@
         '<div class="note-time">' + formatTime(n.ts) + '</div>' +
       '</div>'
     ).join("");
+    hydrateImages(notesList);
   }
+
+  // ---------- lightbox ----------
+  function openLightbox(src, alt) {
+    lightboxImg.src = src;
+    lightboxImg.alt = alt || "";
+    lightboxCap.textContent = alt || "";
+    lightbox.classList.remove("hidden");
+  }
+  function closeLightbox() {
+    lightbox.classList.add("hidden");
+    lightboxImg.removeAttribute("src");
+    lightboxCap.textContent = "";
+  }
+  lightboxClose.addEventListener("click", closeLightbox);
+  lightbox.addEventListener("click", (e) => { if (e.target !== lightboxImg) closeLightbox(); });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !lightbox.classList.contains("hidden")) closeLightbox();
+  });
 
   async function updateWorkTimestamp() {
     const list = state.index[state.category] || [];
@@ -1203,19 +1432,153 @@
     await saveIndex(state.index);
   }
 
+  // ---------- preparing a picked image ----------
+  function fileToDataURL(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error("読み込みに失敗しました"));
+      reader.onload = () => resolve(reader.result);
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // 大きな写真をそのまま持つと保存も表示も重いので、長辺1600pxまで縮めてから保存する。
+  // 小さいPNG/GIF/WebPとSVGは、透過・アニメ・線の鮮明さを保つためにそのまま通す。
+  function shrinkImage(file) {
+    return new Promise((resolve, reject) => {
+      fileToDataURL(file).then(src => {
+        const img = new Image();
+        img.onerror = () => reject(new Error("画像として読み込めませんでした"));
+        img.onload = () => {
+          const scale = Math.min(1, IMG_MAX_EDGE / Math.max(img.width, img.height));
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.max(1, Math.round(img.width * scale));
+          canvas.height = Math.max(1, Math.round(img.height * scale));
+          const ctx = canvas.getContext("2d");
+          ctx.imageSmoothingQuality = "high";
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          let out = "";
+          try { out = canvas.toDataURL("image/webp", 0.85); } catch (e) { out = ""; }
+          if (out.indexOf("data:image/webp") !== 0) out = canvas.toDataURL("image/jpeg", 0.85);
+          resolve(out);
+        };
+        img.src = src;
+      }).catch(reject);
+    });
+  }
+
+  function prepareImage(file) {
+    const asIsTypes = ["image/png", "image/gif", "image/webp"];
+    if (file.type === "image/svg+xml") return fileToDataURL(file);
+    if (file.size <= IMG_KEEP_AS_IS && asIsTypes.indexOf(file.type) >= 0) return fileToDataURL(file);
+    return shrinkImage(file);
+  }
+
   // ---------- full-screen body editor (title/series/year/details are edited via the ⋯ modal instead) ----------
+  const EDIT_HINT = "画像はドラッグ＆ドロップや Ctrl+V でも貼れます";
+  let editOriginal = "";   // 開いた時点の本文（どの画像が消されたか比べるため）
+  let editAdded = [];      // この編集中に追加した画像id
+  let editBusy = false;    // 画像の保存中は保存ボタンを止める
+
+  function setEditStatus(msg) {
+    workEditTools.status.textContent = msg || EDIT_HINT;
+  }
+
+  function setEditBusy(busy) {
+    editBusy = busy;
+    workEditSaveBtn.disabled = busy;
+    workEditTools.imgBtn.disabled = busy;
+  }
+
+  function showEditPreview(on) {
+    if (on) {
+      const html = renderNoteContent(workEditBody.value);
+      workEditTools.preview.innerHTML = workEditBody.value.trim()
+        ? html
+        : '<div class="work-edit-preview-empty">まだ本文がありません。</div>';
+      hydrateImages(workEditTools.preview);
+    }
+    workEditTools.preview.classList.toggle("hidden", !on);
+    workEditBody.classList.toggle("hidden", on);
+    workEditTools.previewBtn.classList.toggle("is-active", on);
+    workEditTools.previewBtn.textContent = on ? "編集に戻る" : "プレビュー";
+    if (!on) workEditBody.focus();
+  }
+
+  function isPreviewing() {
+    return !workEditTools.preview.classList.contains("hidden");
+  }
+
+  function insertImageRef(mid) {
+    const ta = workEditBody;
+    const start = ta.selectionStart, end = ta.selectionEnd;
+    const before = ta.value.slice(0, start);
+    const after = ta.value.slice(end);
+    // 画像は前後を空行で挟むと、Markdownで独立した段落として描かれる
+    const lead = (before === "" || /\n\n$/.test(before)) ? "" : (/\n$/.test(before) ? "\n" : "\n\n");
+    const tail = (after === "" || /^\n\n/.test(after)) ? "" : (/^\n/.test(after) ? "\n" : "\n\n");
+    const ref = "![](" + IMG_REF + mid + ")";
+    ta.value = before + lead + ref + tail + after;
+    const caret = start + lead.length + 2;  // "![" の直後＝キャプションを書き始める位置
+    ta.selectionStart = ta.selectionEnd = caret;
+  }
+
+  async function addImages(fileList) {
+    const files = Array.from(fileList || []).filter(f => f.type.indexOf("image/") === 0);
+    if (!files.length) return;
+    if (isPreviewing()) showEditPreview(false);
+
+    setEditBusy(true);
+    let added = 0;
+    for (const file of files) {
+      setEditStatus("画像を保存中… (" + (added + 1) + "/" + files.length + ")");
+      try {
+        const uri = await prepareImage(file);
+        const mid = genId("img");
+        await saveImageData(mid, uri);
+        insertImageRef(mid);
+        editAdded.push(mid);
+        added++;
+      } catch (e) {
+        console.error("image add failed", e);
+        setEditBusy(false);
+        setEditStatus("「" + file.name + "」を追加できませんでした。別の画像で試してください。");
+        return;
+      }
+    }
+    setEditBusy(false);
+    workEditBody.focus();
+    setEditStatus(added + "枚追加しました。[ ] の中に文字を書くとキャプションになります。");
+  }
+
   function openWorkEditor(work) {
-    workEditBody.value = (state.notes[0] && state.notes[0].content) || "";
+    editOriginal = (state.notes[0] && state.notes[0].content) || "";
+    editAdded = [];
+    workEditBody.value = editOriginal;
+    showEditPreview(false);
+    setEditBusy(false);
+    setEditStatus("");
     workEditOverlay.classList.remove("hidden");
     setTimeout(() => workEditBody.focus(), 30);
   }
 
-  function closeWorkEditor() {
+  function cancelWorkEditor() {
+    // 追加したのに本文へ残らなかった画像は、保管庫にも残さない
+    const kept = collectImgIds(editOriginal);
+    editAdded.filter(id => kept.indexOf(id) < 0).forEach(deleteImageData);
+    editAdded = [];
     workEditOverlay.classList.add("hidden");
   }
 
   async function saveWorkEditor() {
+    if (editBusy) return;
     const bodyText = workEditBody.value.trim();
+
+    // 本文から取り除かれた画像は、保管庫からも消しておく
+    const kept = collectImgIds(bodyText);
+    collectImgIds(editOriginal).filter(id => kept.indexOf(id) < 0).forEach(deleteImageData);
+    editAdded = editAdded.filter(id => kept.indexOf(id) >= 0);
+
     if (bodyText) {
       if (state.notes[0]) state.notes[0].content = bodyText;
       else state.notes.unshift({ id: genId("note"), content: bodyText, ts: Date.now() });
@@ -1226,18 +1589,53 @@
     state.noteCache[state.workId] = state.notes.slice();
     await updateWorkTimestamp();
 
-    closeWorkEditor();
+    editAdded = [];
+    workEditOverlay.classList.add("hidden");
     goWork(state.category, state.workId);
   }
 
-  workEditCancelBtn.addEventListener("click", closeWorkEditor);
+  workEditCancelBtn.addEventListener("click", cancelWorkEditor);
   workEditSaveBtn.addEventListener("click", saveWorkEditor);
   workEditOverlay.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") { e.preventDefault(); closeWorkEditor(); }
+    if (e.key === "Escape") { e.preventDefault(); cancelWorkEditor(); }
+  });
+
+  workEditTools.previewBtn.addEventListener("click", () => showEditPreview(!isPreviewing()));
+  workEditTools.imgBtn.addEventListener("click", () => workEditTools.file.click());
+  workEditTools.file.addEventListener("change", () => {
+    addImages(workEditTools.file.files);
+    workEditTools.file.value = "";   // 同じ画像をもう一度選べるようにする
+  });
+
+  // クリップボードから貼り付け
+  workEditBody.addEventListener("paste", (e) => {
+    const files = e.clipboardData && e.clipboardData.files;
+    if (files && files.length && Array.from(files).some(f => f.type.indexOf("image/") === 0)) {
+      e.preventDefault();
+      addImages(files);
+    }
+  });
+
+  // ドラッグ＆ドロップ
+  ["dragenter", "dragover"].forEach(ev => {
+    workEditBody.addEventListener(ev, (e) => {
+      if (!e.dataTransfer) return;
+      e.preventDefault();
+      workEditBody.classList.add("is-drop");
+    });
+  });
+  ["dragleave", "dragend"].forEach(ev => {
+    workEditBody.addEventListener(ev, () => workEditBody.classList.remove("is-drop"));
+  });
+  workEditBody.addEventListener("drop", (e) => {
+    workEditBody.classList.remove("is-drop");
+    const files = e.dataTransfer && e.dataTransfer.files;
+    if (files && files.length) { e.preventDefault(); addImages(files); }
   });
 
   // ---------- init ----------
   (async function init() {
+    setupMarked();
     state.index = await loadIndex();
     showView("home");
   })();
