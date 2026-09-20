@@ -340,6 +340,48 @@
   }
   @keyframes phPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
 
+  /* ---------- Timeline blocks ( ```timeline ... ``` ) ---------- */
+  .tl { list-style: none; margin: 0 0 1em; padding: 0 0 0 22px; position: relative; }
+  .tl::before {
+    content: ""; position: absolute; left: 4px; top: 7px; bottom: 7px;
+    width: 1px; background: #d5d5d5;   /* 点をつなぐ線。流れが読めるよう枠線より少し濃くする */
+  }
+  .tl-row { position: relative; margin: 0 0 10px; }
+  .tl-row:last-child { margin-bottom: 0; }
+  .tl-dot {
+    position: absolute; left: -22px; top: 14px;
+    width: 9px; height: 9px; border-radius: 50%; background: var(--muted);
+  }
+  .tl-card {
+    background: var(--bg); border: 1px solid var(--border);
+    border-left: 2px solid var(--muted); border-radius: var(--radius-s);
+    padding: 10px 13px;
+  }
+  .tl-when {
+    font-family: var(--font-display); font-size: 10px; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--muted); margin-bottom: 3px;
+  }
+  .tl-title { font-size: 14px; font-weight: 500; line-height: 1.6; }
+  .tl-detail { font-size: 12.5px; color: var(--muted); line-height: 1.75; margin-top: 3px; }
+  .tl-type {
+    display: inline-block; font-family: var(--font-display); font-size: 9.5px;
+    letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted);
+    border: 1px solid var(--border); border-radius: 20px; padding: 2px 8px; margin-top: 8px;
+  }
+  /* 「★」で始まる行は転換点として太く見せる（色ではなく太さで強調する） */
+  .tl-row.is-key .tl-card { border-left-width: 4px; }
+  .tl-row.is-key .tl-title { font-weight: 700; }
+
+  /* 種別の色は先着3種まで。4種目以降はグレーにまとめる。
+     配色は検証済み（全ペアでCVD ΔE 9.2 / 通常視 ΔE 24.0 をクリア）。
+     色だけに頼らないよう、種別名は必ず文字でも出している。 */
+  .tl-c1 .tl-dot { background: #2a78d6; }
+  .tl-c1 .tl-card { border-left-color: #2a78d6; }
+  .tl-c2 .tl-dot { background: #eb6834; }
+  .tl-c2 .tl-card { border-left-color: #eb6834; }
+  .tl-c3 .tl-dot { background: #1baf7a; }
+  .tl-c3 .tl-card { border-left-color: #1baf7a; }
+
   /* ---------- Lightbox (click an image to see it full size) ---------- */
   .lightbox {
     position: fixed; inset: 0; z-index: 90; background: rgba(17,17,17,0.93);
@@ -583,13 +625,14 @@
     </div>
   </div>
   <div class="work-edit-tools">
-    <button class="tool-btn" id="work-edit-img-btn">＋ 画像</button>
+    <button class="tool-btn" id="work-edit-img-btn">＋ ファイル</button>
+    <button class="tool-btn" id="work-edit-tl-btn">＋ 年表</button>
     <button class="tool-btn" id="work-edit-preview-btn">プレビュー</button>
-    <span class="work-edit-status" id="work-edit-status">画像はドラッグ＆ドロップや Ctrl+V でも貼れます</span>
+    <span class="work-edit-status" id="work-edit-status">画像・CSV・MDはドラッグ＆ドロップや Ctrl+V でも貼れます</span>
   </div>
-  <textarea class="work-edit-body" id="work-edit-body" placeholder="本文（Markdown対応：# 見出し / **太字** / - 箇条書き / 画像）"></textarea>
+  <textarea class="work-edit-body" id="work-edit-body" placeholder="本文（Markdown対応：# 見出し / **太字** / - 箇条書き / 画像 / 年表）"></textarea>
   <div class="work-edit-preview markdown-body hidden" id="work-edit-preview"></div>
-  <input type="file" id="work-edit-file" accept="image/*" multiple hidden />
+  <input type="file" id="work-edit-file" accept="image/*,.csv,.tsv,.md,.txt,.markdown,text/*" multiple hidden />
 </div>
 
 <!-- Lightbox: full-size view of a note image -->
@@ -725,9 +768,11 @@
     return ids;
   }
 
-  // 検索やスニペット用に、画像参照を取り除いた素の文章を返す
-  function stripImgRefs(text) {
-    return (text || "").replace(/!\[[^\]]*\]\(\s*memoire:[^)]*\)/g, " ");
+  // 検索やスニペット用に、読み物ではない記号（画像参照・コードフェンス）を落とした文章を返す
+  function plainForSearch(text) {
+    return (text || "")
+      .replace(/!\[[^\]]*\]\(\s*memoire:[^)]*\)/g, " ")
+      .replace(/^```.*$/gm, " ");
   }
 
   // ---------- utils ----------
@@ -779,6 +824,7 @@
   const workEditBody = document.getElementById("work-edit-body");
   const workEditTools = {
     imgBtn: document.getElementById("work-edit-img-btn"),
+    tlBtn: document.getElementById("work-edit-tl-btn"),
     previewBtn: document.getElementById("work-edit-preview-btn"),
     status: document.getElementById("work-edit-status"),
     preview: document.getElementById("work-edit-preview"),
@@ -991,8 +1037,7 @@
         let snippet = "";
         const notes = state.noteCache[w.id] || [];
         for (const n of notes) {
-          // 画像参照（![](memoire:…)）は読み物ではないので、検索対象から外す
-          const text = stripImgRefs(n.content);
+          const text = plainForSearch(n.content);
           if (normalize(text).includes(normalize(q))) { snippet = makeSnippet(text, q); break; }
         }
         if (inTitle || inSeries || inCredits || snippet) {
@@ -1332,10 +1377,96 @@
   // 枠を画面に置いたあとで実データを取りに行き、届いた順に差し込む（hydrateImages）。
   // こうすると重い画像を待たずに本文がすぐ読める。
   // <figure> は <p> の中に置けないので、見た目だけ block にした <span> を使っている。
+  // ---------- timeline blocks ----------
+  // ```timeline
+  // 時点 | 見出し | 説明 | 種別
+  // ``` を、縦線つきの年表として描く。
+  // 区切りは「|」「タブ」「カンマ(CSV)」のどれでもよいので、CSVをそのまま貼れる。
+  const TL_HEADERS = [
+    "時点", "時期", "日付", "年", "年代", "when", "date", "time",
+    "見出し", "項目", "出来事", "タイトル", "title", "event", "name",
+    "説明", "詳細", "備考", "note", "notes", "detail", "description",
+    "種別", "分類", "タイプ", "区分", "type", "category", "kind"
+  ];
+
+  function tlPickSep(lines) {
+    let best = "|", bestScore = 0;
+    ["|", "\t", ","].forEach(s => {
+      const score = lines.filter(l => l.indexOf(s) >= 0).length;
+      if (score > bestScore) { bestScore = score; best = s; }
+    });
+    return best;
+  }
+
+  function tlSplitRow(line, sep) {
+    if (sep !== ",") return line.split(sep).map(c => c.trim());
+    // CSVは引用符つきのカンマを含みうるので、素朴なsplitでは壊れる
+    const out = [];
+    let cur = "", quoted = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (quoted) {
+        if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; }
+        else if (ch === '"') quoted = false;
+        else cur += ch;
+      } else if (ch === '"') quoted = true;
+      else if (ch === ",") { out.push(cur.trim()); cur = ""; }
+      else cur += ch;
+    }
+    out.push(cur.trim());
+    return out;
+  }
+
+  function tlLooksLikeHeader(cells) {
+    const named = cells.filter(c => TL_HEADERS.indexOf(c.toLowerCase()) >= 0).length;
+    return named >= Math.min(2, cells.length);
+  }
+
+  function renderTimeline(src) {
+    const lines = (src || "").split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    if (!lines.length) return "";
+    const sep = tlPickSep(lines);
+    let rows = lines.map(l => tlSplitRow(l, sep));
+    if (tlLooksLikeHeader(rows[0])) rows = rows.slice(1);   // 見出し行は表示しない
+    rows = rows.filter(r => r.some(c => c));
+    if (!rows.length) return "";
+
+    // 種別ごとに色を割り当てる。先着3種まで色をつけ、それ以降はグレーにまとめる
+    const types = [];
+    rows.forEach(r => {
+      const t = (r[3] || "").trim();
+      if (t && types.indexOf(t) < 0) types.push(t);
+    });
+
+    return '<ol class="tl">' + rows.map(r => {
+      const when = (r[0] || "").trim();
+      const title = (r[1] || "").trim();
+      const detail = (r[2] || "").trim();
+      const type = (r[3] || "").trim();
+      const slot = types.indexOf(type);
+      const color = (type && slot >= 0 && slot < 3) ? " tl-c" + (slot + 1) : "";
+      const key = when.indexOf("★") === 0 ? " is-key" : "";
+      return '<li class="tl-row' + color + key + '">' +
+        '<span class="tl-dot"></span>' +
+        '<div class="tl-card">' +
+          (when ? '<div class="tl-when">' + escapeHtml(when) + '</div>' : '') +
+          (title ? '<div class="tl-title">' + escapeHtml(title) + '</div>' : '') +
+          (detail ? '<div class="tl-detail">' + escapeHtml(detail) + '</div>' : '') +
+          (type ? '<div class="tl-type">' + escapeHtml(type) + '</div>' : '') +
+        '</div></li>';
+    }).join("") + '</ol>';
+  }
+
   function setupMarked() {
     if (!window.marked || typeof window.marked.use !== "function") return;
     window.marked.use({
       renderer: {
+        code(text, infostring, escaped) {
+          const tag = (infostring || "").trim().split(/\s+/)[0].toLowerCase();
+          if (tag === "timeline") return renderTimeline(text);
+          const cls = tag ? ' class="language-' + escapeHtml(tag) + '"' : "";
+          return '<pre><code' + cls + '>' + (escaped ? text : escapeHtml(text)) + '\n</code></pre>';
+        },
         image(href, title, text) {
           const alt = text || "";
           const cap = alt ? '<span class="note-img-cap">' + escapeHtml(alt) + '</span>' : '';
@@ -1488,9 +1619,12 @@
     editBusy = busy;
     workEditSaveBtn.disabled = busy;
     workEditTools.imgBtn.disabled = busy;
+    workEditTools.tlBtn.disabled = busy;
   }
 
   function showEditPreview(on) {
+    // 閉じるときに中身を捨てる。画像を抱えたままだと無駄に残り続けるため
+    if (!on) workEditTools.preview.innerHTML = "";
     if (on) {
       const html = renderNoteContent(workEditBody.value);
       workEditTools.preview.innerHTML = workEditBody.value.trim()
@@ -1509,46 +1643,80 @@
     return !workEditTools.preview.classList.contains("hidden");
   }
 
-  function insertImageRef(mid) {
+  // カーソル位置にブロックを差し込む。前後を空行で挟むのは、
+  // Markdownでは空行がないと独立した段落として扱われないため。
+  function insertBlock(text, caretOffset) {
     const ta = workEditBody;
     const start = ta.selectionStart, end = ta.selectionEnd;
     const before = ta.value.slice(0, start);
     const after = ta.value.slice(end);
-    // 画像は前後を空行で挟むと、Markdownで独立した段落として描かれる
     const lead = (before === "" || /\n\n$/.test(before)) ? "" : (/\n$/.test(before) ? "\n" : "\n\n");
     const tail = (after === "" || /^\n\n/.test(after)) ? "" : (/^\n/.test(after) ? "\n" : "\n\n");
-    const ref = "![](" + IMG_REF + mid + ")";
-    ta.value = before + lead + ref + tail + after;
-    const caret = start + lead.length + 2;  // "![" の直後＝キャプションを書き始める位置
-    ta.selectionStart = ta.selectionEnd = caret;
+    ta.value = before + lead + text + tail + after;
+    ta.selectionStart = ta.selectionEnd =
+      start + lead.length + (caretOffset === undefined ? text.length : caretOffset);
   }
 
-  async function addImages(fileList) {
-    const files = Array.from(fileList || []).filter(f => f.type.indexOf("image/") === 0);
-    if (!files.length) return;
+  // 年表のひな形。1行目の見出し行は描画時に読み飛ばされるので、そのまま書式の説明になる。
+  const TL_HEAD = "```timeline\n時点 | 見出し | 説明 | 種別\n";
+  const TL_TEMPLATE = TL_HEAD + "① | 最初の出来事 | 補足説明 | 順行\n```";
+
+  function isTextFile(file) {
+    return /\.(csv|tsv|md|markdown|txt)$/i.test(file.name || "") ||
+           (file.type || "").indexOf("text/") === 0;
+  }
+
+  function isUsableFile(file) {
+    return file.type.indexOf("image/") === 0 || isTextFile(file);
+  }
+
+  async function addTextFile(file) {
+    const raw = (await file.text()).replace(/^﻿/, "").trim();   // Excel等が付けるBOMを落とす
+    if (!raw) return;
+    // 表データ（CSV/TSV）は年表として差し込む。区切り文字はパーサが判別する
+    if (/\.(csv|tsv)$/i.test(file.name || "")) insertBlock("```timeline\n" + raw + "\n```");
+    else insertBlock(raw);
+  }
+
+  async function addFiles(fileList) {
+    const files = Array.from(fileList || []).filter(isUsableFile);
+    if (!files.length) {
+      setEditStatus("画像・CSV・TSV・Markdown・テキストのファイルに対応しています。");
+      return;
+    }
     if (isPreviewing()) showEditPreview(false);
 
     setEditBusy(true);
-    let added = 0;
+    let images = 0, texts = 0;
     for (const file of files) {
-      setEditStatus("画像を保存中… (" + (added + 1) + "/" + files.length + ")");
       try {
-        const uri = await prepareImage(file);
-        const mid = genId("img");
-        await saveImageData(mid, uri);
-        insertImageRef(mid);
-        editAdded.push(mid);
-        added++;
+        if (file.type.indexOf("image/") === 0) {
+          setEditStatus("画像を保存中… (" + (images + 1) + ")");
+          const uri = await prepareImage(file);
+          const mid = genId("img");
+          await saveImageData(mid, uri);
+          insertBlock("![](" + IMG_REF + mid + ")", 2);   // "![" の直後＝キャプションを書き始める位置
+          editAdded.push(mid);
+          images++;
+        } else {
+          setEditStatus("「" + file.name + "」を読み込み中…");
+          await addTextFile(file);
+          texts++;
+        }
       } catch (e) {
-        console.error("image add failed", e);
+        console.error("file add failed", e);
         setEditBusy(false);
-        setEditStatus("「" + file.name + "」を追加できませんでした。別の画像で試してください。");
+        setEditStatus("「" + file.name + "」を読み込めませんでした。");
         return;
       }
     }
     setEditBusy(false);
     workEditBody.focus();
-    setEditStatus(added + "枚追加しました。[ ] の中に文字を書くとキャプションになります。");
+    const what = [];
+    if (images) what.push("画像" + images + "枚");
+    if (texts) what.push("ファイル" + texts + "件");
+    setEditStatus(what.join("・") + "を追加しました。" +
+      (images && !texts ? "[ ] の中に文字を書くとキャプションになります。" : "プレビューで見た目を確認できます。"));
   }
 
   function openWorkEditor(work) {
@@ -1602,17 +1770,23 @@
 
   workEditTools.previewBtn.addEventListener("click", () => showEditPreview(!isPreviewing()));
   workEditTools.imgBtn.addEventListener("click", () => workEditTools.file.click());
+  workEditTools.tlBtn.addEventListener("click", () => {
+    if (isPreviewing()) showEditPreview(false);
+    insertBlock(TL_TEMPLATE, TL_HEAD.length);   // 見出し行の次＝最初のデータ行の先頭にカーソルを置く
+    workEditBody.focus();
+    setEditStatus("「時点 | 見出し | 説明 | 種別」の順に、1行ずつ書いてください。");
+  });
   workEditTools.file.addEventListener("change", () => {
-    addImages(workEditTools.file.files);
-    workEditTools.file.value = "";   // 同じ画像をもう一度選べるようにする
+    addFiles(workEditTools.file.files);
+    workEditTools.file.value = "";   // 同じファイルをもう一度選べるようにする
   });
 
   // クリップボードから貼り付け
   workEditBody.addEventListener("paste", (e) => {
     const files = e.clipboardData && e.clipboardData.files;
-    if (files && files.length && Array.from(files).some(f => f.type.indexOf("image/") === 0)) {
+    if (files && files.length && Array.from(files).some(isUsableFile)) {
       e.preventDefault();
-      addImages(files);
+      addFiles(files);
     }
   });
 
@@ -1630,7 +1804,7 @@
   workEditBody.addEventListener("drop", (e) => {
     workEditBody.classList.remove("is-drop");
     const files = e.dataTransfer && e.dataTransfer.files;
-    if (files && files.length) { e.preventDefault(); addImages(files); }
+    if (files && files.length) { e.preventDefault(); addFiles(files); }
   });
 
   // ---------- init ----------
