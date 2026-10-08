@@ -259,6 +259,14 @@
   .field input:focus, .field textarea:focus { outline: none; border-bottom-width: 2px; }
   .field-locked { font-size: 13.5px; color: var(--muted); padding: 9px 4px; border-bottom: 1px solid var(--border); font-family: var(--font-body); }
 
+  /* 新規作成モーダルのMD読み取り欄。長文を貼っても膨らまないよう低めに固定する */
+  .md-intake { min-height: 58px; max-height: 92px; font-size: 13px !important; line-height: 1.6; }
+  .md-intake-note {
+    font-family: var(--font-body); font-size: 11px; color: var(--muted);
+    line-height: 1.7; margin-top: 6px;
+  }
+  .md-intake-note.is-ok { color: var(--gold); }
+
   .modal-error { color: #b8362a; font-size: 11.5px; margin-top: -8px; margin-bottom: 10px; min-height: 14px; font-family: var(--font-body); }
   .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
   .btn { border-radius: var(--radius-s); padding: 9px 18px; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; border: 1px solid var(--ink); }
@@ -569,6 +577,14 @@
     <h3 id="modal-heading">新規作成</h3>
     <p class="modal-desc" id="modal-subdesc">タイトルを入力してください。シリーズや詳細は後からでも追加できます。</p>
 
+    <div class="field" id="f-md-field">
+      <label for="f-md">Markdownを貼り付け（任意）</label>
+      <textarea id="f-md" class="md-intake" placeholder="ここに貼ると、タイトル・年・詳細を読み取って下の欄に入れます。本文もそのまま登録されます。"></textarea>
+      <button type="button" class="unlock-btn" id="f-md-file-btn">ファイルから読み込む</button>
+      <input type="file" id="f-md-file" accept=".md,.markdown,.txt,text/*" hidden />
+      <div class="md-intake-note" id="f-md-note"></div>
+    </div>
+
     <div class="field">
       <label for="f-title">タイトル</label>
       <input id="f-title" type="text" maxlength="80" placeholder="例：攻殻機動隊 ARISE" />
@@ -628,6 +644,7 @@
     <button class="tool-btn" id="work-edit-img-btn">＋ ファイル</button>
     <button class="tool-btn" id="work-edit-tl-btn">＋ 年表</button>
     <button class="tool-btn" id="work-edit-preview-btn">プレビュー</button>
+    <button class="tool-btn" id="work-edit-clear-btn">本文を消去</button>
     <span class="work-edit-status" id="work-edit-status">画像・CSV・MDはドラッグ＆ドロップや Ctrl+V でも貼れます</span>
   </div>
   <textarea class="work-edit-body" id="work-edit-body" placeholder="本文（Markdown対応：# 見出し / **太字** / - 箇条書き / 画像 / 年表）"></textarea>
@@ -768,6 +785,66 @@
     return ids;
   }
 
+  // ---------- reading metadata out of a Markdown file ----------
+  // Claudeに出させたMDの先頭から、タイトル・年・詳細などを読み取る。書き方は2通り:
+  //   ① 先頭を --- で囲み、その中に「キー: 値」を並べる
+  //   ② 1行目を「# タイトル」にする（これだけでもタイトルは埋まる）
+  // 知らないキー（監督・脚本など）は捨てずに「詳細」へまとめるので、
+  // 作品の種類ごとに項目が違っても、そのまま書けば取りこぼさない。
+  const META_KEYS = {
+    title:   ["title", "タイトル", "作品名", "題名", "名前"],
+    series:  ["series", "シリーズ", "作家", "作者", "著者", "アーティスト", "分類", "分野", "時代", "様式", "ジャンル"],
+    year:    ["year", "年", "年代", "公開年", "発表年", "制作年", "出版年", "放送年"],
+    credits: ["credits", "詳細", "備考", "クレジット", "note", "notes"]
+  };
+
+  function metaFieldFor(key) {
+    const k = key.trim().toLowerCase();
+    for (const field in META_KEYS) {
+      if (META_KEYS[field].some(alias => alias === k)) return field;
+    }
+    return null;
+  }
+
+  function stripFrontMatter(text) {
+    const t = (text || "").trim();
+    const fm = t.match(/^---[ \t]*\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/);
+    return fm ? t.slice(fm[0].length).trim() : t;
+  }
+
+  function parseMarkdownMeta(text) {
+    const out = { title: "", series: "", year: "", credits: "", body: (text || "").trim() };
+    const extra = [];
+
+    const fm = out.body.match(/^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/);
+    if (fm) {
+      fm[1].split(/\r?\n/).forEach(line => {
+        const at = line.indexOf(":");
+        if (at < 0) return;
+        const key = line.slice(0, at).trim().replace(/^[-*]\s+/, "").replace(/^\*\*|\*\*$/g, "");
+        const val = line.slice(at + 1).trim().replace(/^["']|["']$/g, "");
+        if (!key || !val) return;
+        const field = metaFieldFor(key);
+        if (field === "credits") extra.unshift(val);
+        else if (field) { if (!out[field]) out[field] = val; }
+        else extra.push(key + ": " + val);   // 監督・脚本などは詳細にまとめる
+      });
+      out.body = out.body.slice(fm[0].length).trim();
+    }
+
+    // 先頭の「# タイトル」。タイトルとして使ったとき、および
+    // 前書きのタイトルと同じときは、本文側からは外す（topbarと二重になるため）
+    const h1 = out.body.match(/^#[ \t]+(.+?)[ \t]*(?:\r?\n|$)/);
+    if (h1) {
+      const h1Title = h1[1].trim();
+      if (!out.title) out.title = h1Title;
+      if (out.title === h1Title) out.body = out.body.slice(h1[0].length).trim();
+    }
+
+    if (extra.length) out.credits = extra.join(" / ");
+    return out;
+  }
+
   // 検索やスニペット用に、読み物ではない記号（画像参照・コードフェンス）を落とした文章を返す
   function plainForSearch(text) {
     return (text || "")
@@ -826,6 +903,7 @@
     imgBtn: document.getElementById("work-edit-img-btn"),
     tlBtn: document.getElementById("work-edit-tl-btn"),
     previewBtn: document.getElementById("work-edit-preview-btn"),
+    clearBtn: document.getElementById("work-edit-clear-btn"),
     status: document.getElementById("work-edit-status"),
     preview: document.getElementById("work-edit-preview"),
     file: document.getElementById("work-edit-file")
@@ -847,6 +925,11 @@
   const fSeriesLocked = document.getElementById("f-series-locked");
   const fYear = document.getElementById("f-year");
   const fCredits = document.getElementById("f-credits");
+  const fMdField = document.getElementById("f-md-field");
+  const fMd = document.getElementById("f-md");
+  const fMdNote = document.getElementById("f-md-note");
+  const fMdFileBtn = document.getElementById("f-md-file-btn");
+  const fMdFile = document.getElementById("f-md-file");
   const seriesOptions = document.getElementById("series-options");
   const modalError = document.getElementById("modal-error");
   const modalConfirm = document.getElementById("modal-confirm");
@@ -1217,14 +1300,65 @@
     seriesOptions.innerHTML = names.map(n => '<option value="' + escapeHtml(n) + '"></option>').join("");
   }
 
+  // ---------- Markdown intake on the create modal ----------
+  const MD_HINT = "先頭を --- で囲んで「title: 〜」「年: 〜」「監督: 〜」と並べておくと、そのまま読み取ります。";
+  let pendingBody = "";   // 貼り付けたMDの本文。作成と同時にそのまま登録する
+
+  function resetMdIntake() {
+    fMd.value = "";
+    pendingBody = "";
+    fMdNote.textContent = MD_HINT;
+    fMdNote.classList.remove("is-ok");
+  }
+
+  function applyMdIntake() {
+    const raw = fMd.value.trim();
+    if (!raw) { resetMdIntake(); return; }
+
+    const meta = parseMarkdownMeta(raw);
+    pendingBody = meta.body;
+    if (meta.title) fTitle.value = meta.title;
+    if (meta.year) fYear.value = meta.year;
+    if (meta.credits) fCredits.value = meta.credits;
+    if (meta.series && !fSeriesField.classList.contains("hidden")) fSeries.value = meta.series;
+
+    const got = [];
+    if (meta.title) got.push("タイトル");
+    if (meta.year) got.push("年");
+    if (meta.series) got.push(CATEGORIES[state.category].groupLabel);
+    if (meta.credits) got.push("詳細");
+    fMdNote.textContent = got.length
+      ? got.join("・") + "を読み取りました。本文も一緒に登録されます。"
+      : "タイトルが見つかりませんでした。下の欄に入れてください。本文はこのまま登録されます。";
+    fMdNote.classList.toggle("is-ok", got.length > 0);
+    if (meta.title) modalError.textContent = "";
+  }
+
+  fMd.addEventListener("input", applyMdIntake);
+  fMdFileBtn.addEventListener("click", () => fMdFile.click());
+  fMdFile.addEventListener("change", async () => {
+    const file = fMdFile.files && fMdFile.files[0];
+    fMdFile.value = "";
+    if (!file) return;
+    try {
+      fMd.value = (await file.text()).replace(/^﻿/, "");
+      applyMdIntake();
+    } catch (e) {
+      fMdNote.textContent = "ファイルを読み込めませんでした。";
+      fMdNote.classList.remove("is-ok");
+    }
+  });
+
   function openCreateModal(lockedSeries) {
     state.editingId = null;
     modalHeading.textContent = "新規作成";
-    modalSubdesc.textContent = "タイトルを入力してください。" + CATEGORIES[state.category].groupLabel + "や詳細は後からでも追加できます。";
+    modalSubdesc.textContent = "MDを貼れば、タイトルや年は自動で入ります。手で入れても構いません。";
     modalConfirm.textContent = "作成";
 
     fTitle.value = ""; fSeries.value = ""; fYear.value = ""; fCredits.value = "";
     modalError.textContent = "";
+    fMdField.classList.remove("hidden");
+    resetMdIntake();
     fillSeriesOptions();
 
     if (lockedSeries) {
@@ -1237,7 +1371,7 @@
     }
 
     modalOverlay.classList.remove("hidden");
-    setTimeout(() => fTitle.focus(), 30);
+    setTimeout(() => fMd.focus(), 30);   // 貼り付けがいちばん多い入口なので、ここに合わせる
   }
 
   function openMetaEditModal(work) {
@@ -1245,6 +1379,8 @@
     modalHeading.textContent = "編集";
     modalSubdesc.textContent = "シリーズ名を入れると、同じ名前の作品が自動でまとまります。";
     modalConfirm.textContent = "保存";
+    fMdField.classList.add("hidden");   // 読み取りは新規作成のときだけ
+    resetMdIntake();
 
     fTitle.value = work.title || "";
     fSeries.value = work.seriesName || "";
@@ -1272,6 +1408,7 @@
     state.editingId = null;
     modalHeading.textContent = "新規作成";
     modalConfirm.textContent = "作成";
+    resetMdIntake();
   }
   modalCancel.addEventListener("click", closeCreateModal);
   modalOverlay.addEventListener("click", (e) => { if (e.target === modalOverlay) closeCreateModal(); });
@@ -1324,7 +1461,10 @@
     state.index[state.category] = state.index[state.category] || [];
     state.index[state.category].push(work);
     await saveIndex(state.index);
-    await saveNotes(id, []);
+
+    // MDを貼っていれば、その本文も最初から入った状態で作る
+    const body = (pendingBody || "").trim();
+    await saveNotes(id, body ? [{ id: genId("note"), content: body, ts: now }] : []);
 
     closeCreateModal();
     goWork(state.category, id);
@@ -1606,7 +1746,7 @@
   }
 
   // ---------- full-screen body editor (title/series/year/details are edited via the ⋯ modal instead) ----------
-  const EDIT_HINT = "画像はドラッグ＆ドロップや Ctrl+V でも貼れます";
+  const EDIT_HINT = "「＋ファイル」から画像・CSV・MDを入れられます（貼り付け・ドラッグも可）";
   let editOriginal = "";   // 開いた時点の本文（どの画像が消されたか比べるため）
   let editAdded = [];      // この編集中に追加した画像id
   let editBusy = false;    // 画像の保存中は保存ボタンを止める
@@ -1620,6 +1760,7 @@
     workEditSaveBtn.disabled = busy;
     workEditTools.imgBtn.disabled = busy;
     workEditTools.tlBtn.disabled = busy;
+    workEditTools.clearBtn.disabled = busy;
   }
 
   function showEditPreview(on) {
@@ -1675,7 +1816,8 @@
     if (!raw) return;
     // 表データ（CSV/TSV）は年表として差し込む。区切り文字はパーサが判別する
     if (/\.(csv|tsv)$/i.test(file.name || "")) insertBlock("```timeline\n" + raw + "\n```");
-    else insertBlock(raw);
+    // MDの前書き（--- で囲んだ部分）は本文ではないので落とす。そのまま入れると罫線と文字列になってしまう
+    else insertBlock(stripFrontMatter(raw));
   }
 
   async function addFiles(fileList) {
@@ -1776,6 +1918,16 @@
     workEditBody.focus();
     setEditStatus("「時点 | 見出し | 説明 | 種別」の順に、1行ずつ書いてください。");
   });
+  // スマホで長い本文を選択して消すのは大変なので、ひと押しで空にできるようにする。
+  // まだ保存していないので、間違えても「キャンセル」で元に戻せる。
+  workEditTools.clearBtn.addEventListener("click", () => {
+    if (isPreviewing()) showEditPreview(false);
+    if (!workEditBody.value) { setEditStatus("本文はすでに空です。"); return; }
+    workEditBody.value = "";
+    workEditBody.focus();
+    setEditStatus("本文を消しました。元に戻すには「キャンセル」を押してください。");
+  });
+
   workEditTools.file.addEventListener("change", () => {
     addFiles(workEditTools.file.files);
     workEditTools.file.value = "";   // 同じファイルをもう一度選べるようにする
